@@ -116,17 +116,20 @@ fn main() -> Result<()> {
             let config = config::Config::load()?;
             let client = conn::Client::new(runtime.handle().clone(), config.server.clone());
             let reply = runtime.block_on(async {
-                for _ in 0..50 {
+                // 20 s: the first connection after a quiet spell can be slow while the
+                // Mac's network wakes up (seen as a rare "not connected" with 10 s).
+                for _ in 0..100 {
                     if matches!(client.status(), conn::Status::Connected { .. }) {
                         break;
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 }
-                client.request(request).await
+                let status = client.status();
+                (client.request(request).await, status)
             });
             match reply {
-                Ok(response) => println!("{}", serde_json::to_string_pretty(&response)?),
-                Err(err) => println!("error: {err:?}"),
+                (Ok(response), _) => println!("{}", serde_json::to_string_pretty(&response)?),
+                (Err(err), status) => println!("error: {err:?} (connection: {status:?})"),
             }
             Ok(())
         }
