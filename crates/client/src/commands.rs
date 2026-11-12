@@ -294,8 +294,8 @@ pub async fn save_blob_as(
 ) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let kind = blob::parse_kind(&kind).ok_or("unknown kind")?;
-    let clean: String = name.chars().filter(|c| !c.is_control() && *c != '/' && *c != '\\').collect();
-    let mut dialog = window.dialog().file().set_parent(&window).set_title("Save As").set_file_name(if clean.trim().is_empty() { "download" } else { &clean });
+    let clean = crate::util::clean_file_name(&name);
+    let mut dialog = window.dialog().file().set_parent(&window).set_title("Save As").set_file_name(&clean);
     if let Some(dir) = directories::UserDirs::new().and_then(|d| d.download_dir().map(|p| p.to_path_buf())) {
         dialog = dialog.set_directory(dir);
     }

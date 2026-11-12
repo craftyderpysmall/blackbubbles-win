@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ContextMenu as CM } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AudioLines, Download, Pause, Play, RotateCw, Square } from "lucide-react";
@@ -8,6 +9,12 @@ import { useApp } from "@/lib/app";
 import { bytes, duration, shortTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button, Card, Center, EmptyState, IconButton, SearchInput, Spinner } from "@/components/ui";
+
+/** "Weekly sync.m4a": the memo's title, minus characters Windows doesn't allow in names. */
+function fileName(title: string): string {
+  const clean = title.replace(/[\\/:*?"<>|]/g, "-").trim();
+  return `${clean || "Recording"}.m4a`;
+}
 
 /** The Rust player's state, polled while something is loaded. */
 function usePlayer(): [AudioState | null, () => void] {
@@ -93,6 +100,7 @@ function MemoList({ memos, activeId, playing, loadingId, onPlay }: { memos: Voic
           const active = m.id === activeId;
           return (
             <div key={m.id} className="absolute inset-x-0" style={{ height: row.size, transform: `translateY(${row.start}px)` }}>
+              <MemoMenu memo={m} playing={active && playing} onPlay={() => onPlay(m)}>
               <button
                 onClick={() => onPlay(m)}
                 className={cn("flex h-14 w-full items-center gap-3 rounded-control px-3 text-left transition-colors duration-150", active ? "bg-border" : "hover:bg-raised")}
@@ -106,11 +114,34 @@ function MemoList({ memos, activeId, playing, loadingId, onPlay }: { memos: Voic
                 </span>
                 <span className="shrink-0 font-mono text-xs text-muted">{duration(m.duration_secs)}</span>
               </button>
+              </MemoMenu>
             </div>
           );
         })}
       </div>
     </div>
+  );
+}
+
+/** Right-click menu for a recording: play/pause and Save Recording As…. */
+function MemoMenu({ memo, playing, onPlay, children }: { memo: VoiceMemo; playing: boolean; onPlay: () => void; children: ReactNode }) {
+  const { toast } = useApp();
+  const item = "flex h-8 cursor-default items-center gap-2 rounded-[8px] px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-raised [&_svg]:size-4 [&_svg]:text-muted";
+  return (
+    <CM.Root>
+      <CM.Trigger asChild>{children}</CM.Trigger>
+      <CM.Portal>
+        <CM.Content className="z-50 min-w-52 rounded-control border border-border bg-surface p-1 shadow-soft animate-pop">
+          <CM.Item className={item} onSelect={onPlay}>
+            {playing ? <Pause /> : <Play />} {playing ? "Pause" : "Play"}
+          </CM.Item>
+          <CM.Separator className="my-1 h-px bg-border" />
+          <CM.Item className={item} onSelect={() => void saveAs("VoiceMemo", memo.id, fileName(memo.title), toast)}>
+            <Download /> Save Recording As…
+          </CM.Item>
+        </CM.Content>
+      </CM.Portal>
+    </CM.Root>
   );
 }
 
@@ -125,8 +156,7 @@ function PlayerCard({ state, memo, refresh }: { state: AudioState; memo?: VoiceM
 
   const save = () => {
     setSaving(true);
-    const name = `${(state.title || "Recording").replace(/[\\/]/g, "-")}.m4a`;
-    void saveAs("VoiceMemo", state.id!, name, toast).finally(() => setSaving(false));
+    void saveAs("VoiceMemo", state.id!, fileName(state.title), toast).finally(() => setSaving(false));
   };
 
   return (
