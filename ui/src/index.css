@@ -1,0 +1,149 @@
+@import "tailwindcss";
+/* Fonts (Inter, JetBrains Mono, bundled colour emoji) and MapLibre's CSS are imported
+   from main.tsx so Vite can drop the unused .woff fallbacks. */
+
+/* The "Neutral" theme (tokens in CLAUDE.md; originally from the owner's hyprland.lua). */
+@theme {
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-raised: #212121;
+  --color-border: #262626;
+  --color-border-strong: #404040;
+  --color-fg: #fafafa;
+  --color-muted: #a1a1a1;
+  --color-subtle: #737373;
+  --color-primary: #fafafa;
+  --color-primary-fg: #171717;
+  --color-danger: #e5787a;
+  --color-success: #8ccf9a;
+  --color-warning: #e6c879;
+  --color-info: #82a9e0;
+  --color-magenta: #b49ae6;
+  --color-cyan: #7cc6cf;
+
+  /* Segoe UI Emoji is Windows' complete colour emoji font (shapes FE0F and ZWJ sequences).
+     The bundled Noto subsets only fill in emoji newer than the installed Segoe. */
+  --font-sans: "Inter Variable", "Inter", "Segoe UI Emoji", "BlackBubbles Emoji", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "Cascadia Mono", ui-monospace, "Segoe UI Emoji", "BlackBubbles Emoji", monospace;
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+
+  --shadow-soft: 0 8px 32px rgb(0 0 0 / 0.67);
+  --shadow-lift: 0 8px 32px rgb(0 0 0 / 0.4);
+
+  --ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --animate-enter: enter 300ms var(--ease-decel) both;
+  --animate-pop: pop 300ms var(--ease-decel) both;
+  --animate-fade: fade 250ms var(--ease-decel) both;
+  --animate-toast: toast 300ms var(--ease-decel) both;
+
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.94); }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+  }
+  @keyframes toast {
+    from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    color-scheme: dark;
+    background: var(--color-bg);
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-muted);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+  /* Text people read or copy stays selectable. */
+  .selectable,
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: auto;
+  }
+  /* Selection is the inverted pair: white with black text, and the reverse on white
+     surfaces (your iMessage bubbles, primary buttons) so it stays visible. */
+  ::selection {
+    background: var(--color-fg);
+    color: var(--color-bg);
+  }
+  .bb-inverted::selection,
+  .bb-inverted ::selection {
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+  button {
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 1px solid var(--color-border-strong);
+    outline-offset: 2px;
+  }
+  /* Thin, monochrome scrollbars (border-strong thumb). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* MapLibre: OpenFreeMap's dark style, our own controls and markers. */
+.maplibregl-map {
+  background: #0e0e0e;
+  font-family: var(--font-sans);
+}
+.bb-marker > div:first-child {
+  transition: transform 300ms var(--ease-decel);
+}
+.bb-marker:hover > div:first-child {
+  transform: scale(1.06);
+}
+.maplibregl-ctrl-attrib {
+  background: rgb(23 23 23 / 0.85) !important;
+  color: var(--color-subtle) !important;
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-muted) !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}

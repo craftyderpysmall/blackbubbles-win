@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BlackBubbles",
+  "mainBinaryName": "blackbubbles",
+  "identifier": "com.craftyderpysmall.blackbubbles",
+  "build": {
+    "frontendDist": "../../ui/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../../ui",
+      "wait": false
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../../ui"
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BlackBubbles",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 380,
+        "minHeight": 480,
+        "dragDropEnabled": false,
+        "backgroundColor": "#0a0a0a",
+        "visible": false,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "img-src": "'self' bb: http://bb.localhost data: blob:",
+        "media-src": "'self' bb: http://bb.localhost blob:",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost bb: http://bb.localhost",
+        "worker-src": "'self' blob:"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "category": "SocialNetworking",
+    "shortDescription": "Your Apple world on Windows",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

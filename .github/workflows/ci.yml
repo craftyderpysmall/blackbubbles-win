@@ -1,0 +1,33 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: UI (type-check + build)
+        working-directory: ui
+        run: npm ci && npm run build
+      - uses: Swatinem/rust-cache@v2
+      # custom-protocol embeds ui/dist, as release builds do.
+      - run: cargo build --workspace --locked --features bb-client/custom-protocol
+      - run: cargo test --workspace --exclude bb-mac --locked --features bb-client/custom-protocol
+      - name: Installer (NSIS, per-user)
+        working-directory: ui
+        run: npm run tauri -- build --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blackbubbles-setup
+          path: target/release/bundle/nsis/*.exe

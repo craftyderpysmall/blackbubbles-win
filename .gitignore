@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+.DS_Store
+*.pem
+*.key
+config.toml
+/crates/client/gen
+node_modules/
+/ui/dist

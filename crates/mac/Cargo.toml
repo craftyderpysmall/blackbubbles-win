@@ -1,0 +1,34 @@
+[package]
+name = "bb-mac"
+description = "macOS data access for BlackBubbles: Messages, Notes, Voice Memos, Calendar, Photos, Find My"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bb-proto = { path = "../proto" }
+bb-findmy = { path = "../findmy" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+flate2 = "1"
+aes.workspace = true
+aes-gcm.workspace = true
+pbkdf2.workspace = true
+sha2.workspace = true
+hmac = "0.12"
+plist = "1"
+chacha20poly1305 = "0.10"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+rusqlite = { workspace = true }
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = "0.3"
+objc2-event-kit = "0.3"
+objc2-photos = "0.3"
+objc2-app-kit = "0.3"
+objc2-core-foundation = "0.3"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+rusqlite = { workspace = true, features = ["bundled"] }

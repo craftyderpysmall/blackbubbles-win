@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.craftyderpysmall.bbd</string>
+    <key>CFBundleName</key>
+    <string>BlackBubbles Server</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>BlackBubbles shows and edits your calendars on your other computers.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>BlackBubbles shows and edits your calendars on your other computers.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>BlackBubbles shows and edits your reminders on your other computers.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>BlackBubbles shows and edits your reminders on your other computers.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>BlackBubbles shows your photo library on your other computers.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>BlackBubbles sends messages and edits notes for you.</string>
+</dict>
+</plist>

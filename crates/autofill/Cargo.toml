@@ -1,0 +1,29 @@
+[package]
+name = "bb-autofill"
+description = "Verification code and link autofill (Rust port of linuxautofill), Windows delivery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+regex.workspace = true
+fancy-regex.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tiny_http = "0.12"
+mail-parser = "1"
+rustls.workspace = true
+webpki-roots = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+open = "5"
+
+[target.'cfg(windows)'.dependencies]
+arboard = { version = "3", default-features = false, features = ["image-data"] }
+clipboard-win = "5"
+enigo = "0.6"
+png = "0.17"
+tauri-winrt-notification = "0.8"
+winreg = "0.55"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

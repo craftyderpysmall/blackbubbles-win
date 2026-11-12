@@ -1,0 +1,48 @@
+[package]
+name = "bb-client"
+description = "BlackBubbles desktop app (Tauri) for Windows"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "blackbubbles"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+bb-proto = { path = "../proto" }
+bb-net = { path = "../net" }
+bb-autofill = { path = "../autofill" }
+anyhow.workspace = true
+clap.workspace = true
+directories.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+toml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+hex.workspace = true
+base64.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+rustls.workspace = true
+reqwest.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "=2.8.3"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+percent-encoding = "2"
+rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-aac", "symphonia-isomp4", "symphonia-alac", "wav"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_System_Console"] }
+
+[features]
+# Set by `tauri build`/`tauri dev`; release builds embed the UI from ui/dist.
+custom-protocol = ["tauri/custom-protocol"]
