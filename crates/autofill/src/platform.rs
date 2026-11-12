@@ -140,24 +140,36 @@ impl Platform for Headless {
 #[cfg(windows)]
 mod win {
     use std::cell::Cell;
-    use std::sync::mpsc;
-    use std::time::Duration;
+    use std::sync::mpsc::{self, RecvTimeoutError};
+    use std::time::{Duration, Instant};
 
     use clipboard_win::{formats, get_clipboard, is_format_avail, register_format, set_clipboard};
     use tauri_winrt_notification::Toast;
-    use tracing::warn;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, SetForegroundWindow};
+    use tracing::{debug, info, warn};
+    use windows::Win32::Foundation::{CloseHandle, HWND};
+    use windows::Win32::System::Threading::{
+        AttachThreadInput, GetCurrentThreadId, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        QueryFullProcessImageNameW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetClassNameW, GetForegroundWindow, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SW_RESTORE, SetForegroundWindow,
+        ShowWindow,
+    };
+    use windows::core::PWSTR;
 
     use super::{APP_ID, Clip, PastedFile, Platform, read_pasted};
 
     pub struct Windows;
 
     thread_local! {
-        /// The window in front when the current code's notification was shown (as an
-        /// integer: HWND isn't `Send`). `Deliverer` calls `notify` and then `type_text` on
-        /// the same thread, so this pairs them up.
+        /// The last real app window the user was in while the current code's toast was up
+        /// (an integer: HWND isn't `Send`). `Deliverer` calls `notify` and then `type_text`
+        /// on the same thread, so this pairs them up.
         static TARGET: Cell<isize> = const { Cell::new(0) };
+    }
+
+    fn remember(hwnd: HWND) {
+        TARGET.with(|t| t.set(hwnd.0 as isize));
     }
 
     /// Clipboard formats password managers (KeePass, KeePassXC, 1Password, Bitwarden…)
@@ -228,7 +240,11 @@ mod win {
         }
 
         fn notify(&self, summary: &str, body: &str, action: Option<&str>, timeout_secs: u64) -> bool {
-            TARGET.with(|t| t.set(unsafe { GetForegroundWindow() }.0 as isize));
+            let front = unsafe { GetForegroundWindow() };
+            let ok = is_typing_target(front);
+            debug!("autofill: toast shown; in front {} (target: {ok})", describe(front));
+            remember(if ok { front } else { HWND::default() });
+            let mut last = front;
             let (tx, rx) = mpsc::channel::<bool>();
             let clicked = tx.clone();
             if !toast(summary, body, action, move |_| {
@@ -237,8 +253,34 @@ mod win {
                 return false;
             }
             drop(tx);
-            // A click from Action Center after this is ignored: the clipboard is restored by then.
-            action.is_some() && rx.recv_timeout(Duration::from_secs(timeout_secs.max(1))).unwrap_or(false)
+            if action.is_none() {
+                return false;
+            }
+            // Follow the user while the toast is up: the code goes where they were last
+            // working before the click (they often switch to the login page after it pops
+            // up). Clicking the toast itself puts the shell in front, which is ignored.
+            // A click from Action Center after the deadline is ignored too: the clipboard
+            // is restored by then.
+            let deadline = Instant::now() + Duration::from_secs(timeout_secs.max(1));
+            loop {
+                match rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(_) => return true,
+                    Err(RecvTimeoutError::Disconnected) => return false,
+                    Err(RecvTimeoutError::Timeout) => {}
+                }
+                if Instant::now() >= deadline {
+                    return false;
+                }
+                let front = unsafe { GetForegroundWindow() };
+                if front != last {
+                    last = front;
+                    let ok = is_typing_target(front);
+                    debug!("autofill: in front now {} (target: {ok})", describe(front));
+                    if ok {
+                        remember(front);
+                    }
+                }
+            }
         }
 
         fn can_type(&self) -> bool {
@@ -247,13 +289,20 @@ mod win {
 
         fn type_text(&self, text: &str) {
             let target = HWND(TARGET.with(Cell::get) as *mut _);
-            // Clicking a toast can leave the shell in front; put the user's window back. If
-            // they deliberately switched to another app since, type there instead.
             let front = unsafe { GetForegroundWindow() };
-            if front != target && !target.is_invalid() && (front.is_invalid() || is_shell(front)) {
-                let _ = unsafe { SetForegroundWindow(target) };
-                std::thread::sleep(Duration::from_millis(120));
+            info!("autofill: paste: in front {}, target {}", describe(front), describe(target));
+            if target.is_invalid() {
+                warn!("autofill: no window to paste into; the code is on the clipboard");
+                return;
             }
+            // Never type into whatever happens to be in front (a chat, a terminal...): only
+            // into the window the user was working in.
+            if front != target && !bring_to_front(target) {
+                warn!("autofill: couldn't switch back to {}; the code is on the clipboard", describe(target));
+                return;
+            }
+            // Let the window settle its keyboard focus before keys arrive.
+            std::thread::sleep(Duration::from_millis(80));
             use enigo::{Enigo, Keyboard, Settings};
             match Enigo::new(&Settings::default()) {
                 Ok(mut enigo) => {
@@ -266,15 +315,131 @@ mod win {
         }
     }
 
-    /// The taskbar, Action Center or a toast host: not where a code should be typed.
-    fn is_shell(hwnd: HWND) -> bool {
+    /// Wait up to ~200 ms for `hwnd` to be in front.
+    fn settled(hwnd: HWND) -> bool {
+        for _ in 0..10 {
+            if unsafe { GetForegroundWindow() } == hwnd {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        false
+    }
+
+    /// Put `hwnd` in front despite Windows' foreground lock (a background process may not
+    /// normally take focus). Tries the plain request, then sharing input state with the
+    /// window in front, then a synthetic Alt tap (input from us lifts the lock).
+    fn bring_to_front(hwnd: HWND) -> bool {
+        unsafe {
+            if IsIconic(hwnd).as_bool() {
+                let _ = ShowWindow(hwnd, SW_RESTORE);
+            }
+            let _ = SetForegroundWindow(hwnd);
+            if settled(hwnd) {
+                info!("autofill: paste: switched back directly");
+                return true;
+            }
+            let front = GetForegroundWindow();
+            let front_thread = GetWindowThreadProcessId(front, None);
+            let me = GetCurrentThreadId();
+            if front_thread != 0 && front_thread != me && AttachThreadInput(me, front_thread, true).as_bool() {
+                let _ = BringWindowToTop(hwnd);
+                let _ = SetForegroundWindow(hwnd);
+                let _ = AttachThreadInput(me, front_thread, false);
+                if settled(hwnd) {
+                    info!("autofill: paste: switched back via shared input");
+                    return true;
+                }
+            }
+            use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+            if let Ok(mut enigo) = Enigo::new(&Settings::default()) {
+                let _ = enigo.key(Key::Alt, Direction::Click);
+            }
+            let _ = SetForegroundWindow(hwnd);
+            let ok = settled(hwnd);
+            if ok {
+                info!("autofill: paste: switched back via Alt");
+            }
+            ok
+        }
+    }
+
+    /// Processes whose windows are never where a code goes: the shell and its toast,
+    /// Start and search hosts, the touch keyboard, and window-manager helpers.
+    const NOT_TARGETS: &[&str] = &[
+        "explorer.exe",
+        "shellexperiencehost.exe",
+        "startmenuexperiencehost.exe",
+        "searchhost.exe",
+        "searchapp.exe",
+        "lockapp.exe",
+        "textinputhost.exe",
+        "komorebi.exe",
+        "komorebi-bar.exe",
+    ];
+
+    fn class_name(hwnd: HWND) -> String {
         let mut buf = [0u16; 128];
         let len = unsafe { GetClassNameW(hwnd, &mut buf) }.max(0) as usize;
-        let class = String::from_utf16_lossy(&buf[..len]);
-        matches!(
-            class.as_str(),
-            "Shell_TrayWnd" | "Shell_SecondaryTrayWnd" | "Windows.UI.Core.CoreWindow" | "XamlExplorerHostIslandWindow" | "NotifyIconOverflowWindow"
-        )
+        String::from_utf16_lossy(&buf[..len])
+    }
+
+    fn process_of(hwnd: HWND) -> (u32, Option<String>) {
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+        if pid == 0 {
+            return (0, None);
+        }
+        let name = unsafe {
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok().and_then(|handle| {
+                let mut buf = [0u16; 1024];
+                let mut len = buf.len() as u32;
+                let ok = QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
+                let _ = CloseHandle(handle);
+                ok.then(|| String::from_utf16_lossy(&buf[..len as usize]).rsplit('\\').next().unwrap_or_default().to_ascii_lowercase())
+            })
+        };
+        (pid, name)
+    }
+
+    /// For the log: "notepad.exe [Notepad]".
+    fn describe(hwnd: HWND) -> String {
+        if hwnd.is_invalid() {
+            return "none".into();
+        }
+        let (_, name) = process_of(hwnd);
+        format!("{} [{}]", name.unwrap_or_else(|| "?".into()), class_name(hwnd))
+    }
+    /// A window a code could be typed into: any visible app window (BlackBubbles's own too,
+    /// e.g. its message box) that isn't the shell or a toast.
+    /// toast, or BlackBubbles itself.
+    fn is_typing_target(hwnd: HWND) -> bool {
+        if hwnd.is_invalid() {
+            return false;
+        }
+        if !unsafe { IsWindowVisible(hwnd) }.as_bool() {
+            debug!("autofill: {} isn't visible", describe(hwnd));
+            return false;
+        }
+        if matches!(
+            class_name(hwnd).as_str(),
+            "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "Windows.UI.Core.CoreWindow"
+                | "XamlExplorerHostIslandWindow"
+                | "NotifyIconOverflowWindow"
+                | "TopLevelWindowForOverflowXamlIsland"
+                | "Progman"
+                | "WorkerW"
+        ) {
+            return false;
+        }
+        let (pid, name) = process_of(hwnd);
+        if pid == 0 {
+            debug!("autofill: no process for {}", describe(hwnd));
+        }
+        // A process we can't name (elevated, say) still counts; typing into it fails safely.
+        pid != 0 && name.is_none_or(|n| !NOT_TARGETS.contains(&n.as_str()))
     }
 
     /// Show a toast. `on_click` runs (on a WinRT thread) when the body or a button is

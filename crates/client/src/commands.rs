@@ -5,7 +5,6 @@
 //! `bb://` scheme in [`crate::blob`].
 
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, RwLock};
 
 use base64::Engine;
@@ -42,7 +41,7 @@ pub struct AppState {
     config: Mutex<Config>,
     notifications: notify::Shared,
     pub focused: Arc<AtomicBool>,
-    autofill: Option<Sender<bb_autofill::Incoming>>,
+    autofill: Option<bb_autofill::Autofill>,
     autofill_running: bool,
     /// This window owns autofill and notifications (no daemon is running).
     primary: bool,
@@ -58,7 +57,7 @@ impl AppState {
     pub fn new(
         rt: tokio::runtime::Handle,
         config: Config,
-        autofill: Option<Sender<bb_autofill::Incoming>>,
+        autofill: Option<bb_autofill::Autofill>,
         primary: bool,
         startup_error: Option<String>,
     ) -> Self {
@@ -90,11 +89,7 @@ impl AppState {
             let _guard = self.rt.enter();
             Client::new(self.rt.clone(), config.server.clone())
         };
-        if let Some(tx) = &self.autofill
-            && config.autofill.from_server
-        {
-            client.set_autofill(tx.clone());
-        }
+        client.set_autofill(self.autofill.as_ref().filter(|_| config.autofill.from_server).map(|af| af.tx.clone()));
         // Silence the old client first, so none of its statuses can land after the new one's.
         let old = std::mem::replace(&mut *self.client.write().unwrap(), client.clone());
         old.close();
@@ -349,12 +344,20 @@ pub struct AutofillOptions {
 
 #[tauri::command]
 pub fn save_autofill(state: State<'_, AppState>, options: AutofillOptions) -> Result<ConfigView, String> {
-    state.update(|c| {
+    let view = state.update(|c| {
         c.autofill.enabled = options.enabled;
         c.autofill.from_server = options.from_server;
         c.autofill.notify = options.notify;
         c.autofill.clear_after = options.clear_after.clamp(5, 600);
-    })
+    })?;
+    // Codes from the Mac, the restore delay and silent mode apply at once; turning
+    // autofill on or off, the endpoint and Gmail need a restart.
+    if let Some(af) = &state.autofill {
+        let c = state.config.lock().unwrap();
+        af.set_options(c.autofill.clear_after, c.autofill.notify);
+        state.client().set_autofill(c.autofill.from_server.then(|| af.tx.clone()));
+    }
+    Ok(view)
 }
 
 #[tauri::command]

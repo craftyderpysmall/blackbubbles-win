@@ -152,7 +152,7 @@ fn run_gui(runtime: &tokio::runtime::Runtime, hidden: bool) -> Result<()> {
     let (lock, autofill) = start_primary(&config);
     let primary = lock.is_some();
     let on_exit = autofill.clone();
-    let state = commands::AppState::new(runtime.handle().clone(), config, autofill.map(|af| af.tx), primary, startup_error);
+    let state = commands::AppState::new(runtime.handle().clone(), config, autofill, primary, startup_error);
 
     // Tauri, the connection and the bb:// handler all share one runtime.
     tauri::async_runtime::set(runtime.handle().clone());

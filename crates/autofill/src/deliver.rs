@@ -7,6 +7,7 @@
 //! - nothing is typed or opened without a click.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -28,9 +29,11 @@ struct State {
 #[derive(Clone)]
 pub struct Deliverer {
     platform: Arc<dyn Platform>,
-    clear_after: Duration,
+    /// Milliseconds. Shared and atomic so Settings changes apply to the next code without a
+    /// restart.
+    clear_after: Arc<AtomicU64>,
     state: Arc<Mutex<State>>,
-    notify: bool,
+    notify: Arc<AtomicBool>,
 }
 
 fn host_of(url: &str) -> String {
@@ -39,13 +42,35 @@ fn host_of(url: &str) -> String {
 
 impl Deliverer {
     pub fn new(platform: Arc<dyn Platform>, clear_after: Duration) -> Self {
-        Self { platform, clear_after, state: Arc::default(), notify: true }
+        Self {
+            platform,
+            clear_after: Arc::new(AtomicU64::new(clear_after.as_millis() as u64)),
+            state: Arc::default(),
+            notify: Arc::new(AtomicBool::new(true)),
+        }
     }
 
     /// Without notifications codes are only copied (links can't be offered at all).
-    pub fn with_notifications(mut self, notify: bool) -> Self {
-        self.notify = notify;
+    pub fn with_notifications(self, notify: bool) -> Self {
+        self.set_notifications(notify);
         self
+    }
+
+    /// Change the restore delay; applies from the next code on.
+    pub fn set_clear_after(&self, clear_after: Duration) {
+        self.clear_after.store(clear_after.as_millis() as u64, Ordering::Relaxed);
+    }
+
+    pub fn set_notifications(&self, notify: bool) {
+        self.notify.store(notify, Ordering::Relaxed);
+    }
+
+    fn clear_after(&self) -> Duration {
+        Duration::from_millis(self.clear_after.load(Ordering::Relaxed))
+    }
+
+    fn notifies(&self) -> bool {
+        self.notify.load(Ordering::Relaxed)
     }
 
     fn is_duplicate(&self, value: &str) -> bool {
@@ -69,9 +94,9 @@ impl Deliverer {
             state.generation += 1;
             state.generation
         };
-        let (this, value) = (self.clone(), value.to_string());
+        let (this, value, delay) = (self.clone(), value.to_string(), self.clear_after());
         std::thread::spawn(move || {
-            std::thread::sleep(this.clear_after);
+            std::thread::sleep(delay);
             let mut state = this.state.lock().unwrap();
             if state.generation != generation {
                 return; // a newer code took over; it will restore
@@ -104,13 +129,13 @@ impl Deliverer {
             return;
         }
         self.copy_with_restore(code);
-        if !self.notify {
+        if !self.notifies() {
             info!("autofill: copied a code");
             return;
         }
         let can_type = self.platform.can_type();
         let body = if can_type { format!("From {sender}. Click to paste.") } else { format!("From {sender}. Copied to the clipboard.") };
-        let (platform, code, secs) = (self.platform.clone(), code.to_string(), self.clear_after.as_secs());
+        let (platform, code, secs) = (self.platform.clone(), code.to_string(), self.clear_after().as_secs());
         std::thread::spawn(move || {
             let clicked = platform.notify(&code, &body, can_type.then_some("Paste"), secs);
             if clicked && can_type {
@@ -121,12 +146,12 @@ impl Deliverer {
     }
 
     pub fn deliver_link(&self, url: &str, _sender: &str) {
-        if !self.notify || self.is_duplicate(url) {
+        if !self.notifies() || self.is_duplicate(url) {
             return;
         }
         // Show the host so lookalike domains stand out.
         let body = format!("Opens {}. Click to open.", host_of(url));
-        let (platform, url, secs) = (self.platform.clone(), url.to_string(), self.clear_after.as_secs());
+        let (platform, url, secs) = (self.platform.clone(), url.to_string(), self.clear_after().as_secs());
         std::thread::spawn(move || {
             if platform.notify("Verification link", &body, Some("Open"), secs) {
                 platform.open_url(&url);
@@ -207,6 +232,17 @@ mod tests {
         d.deliver_code("424242", "x");
         assert_eq!(fake.current_text().as_deref(), Some("424242"));
         d.restore_now();
+        assert_eq!(fake.current_text().as_deref(), Some("before"));
+    }
+
+    #[test]
+    fn restore_delay_changes_apply_to_the_next_code() {
+        let fake = Arc::new(Fake::default());
+        *fake.clipboard.lock().unwrap() = Some("before".into());
+        let d = Deliverer::new(fake.clone(), Duration::from_secs(60)).with_notifications(false);
+        d.set_clear_after(Duration::from_millis(100));
+        d.deliver_code("135790", "x");
+        std::thread::sleep(Duration::from_millis(250));
         assert_eq!(fake.current_text().as_deref(), Some("before"));
     }
 

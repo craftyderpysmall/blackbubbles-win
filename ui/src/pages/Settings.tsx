@@ -352,7 +352,7 @@ function AutofillSettings() {
           </form>
         </div>
       </Group>
-      <p className="mt-2 text-xs text-subtle">Source and endpoint changes apply after quitting BlackBubbles from the tray and starting it again.</p>
+      <p className="mt-2 text-xs text-subtle">Turning autofill on or off, the Shortcut endpoint and Gmail apply after quitting BlackBubbles from the tray and starting it again. Everything else applies at once.</p>
     </Section>
   );
 }

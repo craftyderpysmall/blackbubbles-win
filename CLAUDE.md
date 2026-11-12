@@ -51,26 +51,30 @@ This repo is the **Windows port** of [BlackBubbles](https://github.com/craftyder
   - Codes are copied with arboard's `exclude_from_history().exclude_from_cloud()`, so they stay out of Win+V and the cloud clipboard.
   - `snapshot` refuses password-manager content: any of `ExcludeClipboardContentFromMonitorProcessing`, `Clipboard Viewer Ignore`, or `CanIncludeInClipboardHistory` = 0. Otherwise it saves files (CF_HDROP), then text, then a DIB.
 - **Typing:**
-  - enigo (SendInput) types into the window that was in front when the toast appeared.
-  - If a click left the shell in front (`Shell_TrayWnd`, `Windows.UI.Core.CoreWindow`, …), `SetForegroundWindow` puts that window back first.
-  - **Where focus lands after a toast click is unverified**; check it on the first real run.
+  - While a code's toast is up, `notify` polls the foreground every 100 ms and remembers the last **typing target**: any visible window except the shell, toast and Start/search hosts and komorebi (`is_typing_target`, `NOT_TARGETS`). BlackBubbles' own window counts, e.g. its message box.
+  - A toast click leaves `explorer.exe [ApplicationManager_DesktopShellWindow]` in front (verified 2026-11-12), so `type_text` brings the target back with `bring_to_front`: plain `SetForegroundWindow` (worked directly in every test), then `AttachThreadInput`, then an Alt tap.
+  - It types only once the target is really in front. With no target, or if switching back fails, it types nothing and the code stays on the clipboard.
+  - `RUST_LOG=bb_autofill=debug` logs every foreground change and verdict while a toast is up; `paste:` lines are at info.
   - UIPI blocks typing into elevated windows.
 - **Firewall:** the Shortcut endpoint binds `0.0.0.0:8787`, and Windows Firewall prompts on first listen. Tell the owner to allow Private networks only.
 - **mDNS:** Windows resolves `.local` natively, on Private networks only.
 
 ## Status (2026-11-11)
 
-**Builds on Windows, and all 38 tests pass** (2026-11-11; `--exclude bb-mac`). The tests include the verbatim detect suite, the `write_private` ACL test checked with real `icacls`, and PNG encoding. The APIs used were checked against the crate sources: clipboard-win 5.4.3, arboard 3.7, windows 0.62.2, tauri 2.12.5, autostart 2.7, single-instance 2.5.5, tauri-winrt-notification 0.8.1.
+**Builds on Windows, and all 39 tests pass** (2026-11-12; `--exclude bb-mac`). The tests include the verbatim detect suite, the `write_private` ACL test checked with real `icacls`, and PNG encoding. The APIs used were checked against the crate sources: clipboard-win 5.4.3, arboard 3.7, windows 0.62.2, tauri 2.12.5, autostart 2.7, single-instance 2.5.5, tauri-winrt-notification 0.8.1.
 - **Verification status:**
   1. **Tests:** done.
   - **Mock, partly done (2026-11-11):**
     - The CLI `pair` went over pinned TLS, the config came out with an owner + SYSTEM only access list, and `request` output reached the terminal.
     - The window rendered Messages (Segoe colour emoji incl. 🏕️), Reminders, Calendar, Photos (`bb://` blobs), Find My (map via `bb://map`) and Settings. These were captured with `PrintWindow` on the app's own window only, relaunching per tab with `BLACKBUBBLES_TAB`.
     - The AUMID registry key was written.
-    - Not yet checked on the mock: interaction (send, paste, drag-drop, Save As, voice), toasts, the tray, and the Start at login switch.
-  2. **Mock, end to end:** every tab renders (✈️, a ZWJ emoji, a flag), send + echo, paste and drag-drop of an image and an Explorer file, Save As, voice playback (muted), the map.
-  3. **Mock code toast:** Paste types into Notepad, the clipboard is restored, and the code isn't in Win+V. Save the real clipboard first.
-  4. **Tray:** close hides, Quit exits and restores the clipboard, a second launch focuses, and the Start at login switch adds and removes the HKCU Run value.
+    - Not yet checked on the mock: send, paste and drag-drop of files into a chat, Save As, voice playback.
+  2. **Code toast, verified by the owner on the mock (2026-11-12):**
+     - Toasts show as BlackBubbles.
+     - Paste types into the window the owner was in (Chrome, BlackBubbles' message box).
+     - The clipboard is restored after `clear_after`, and codes stay out of Win+V.
+     - Fixed along the way: `clear_after`, `notify` and `from_server` used to need a restart, and they now apply when saved (`Autofill::set_options`, `Client::set_autofill(Option)`). Paste used to type into the shell after the toast click.
+  3. **Tray and Start at login, verified by the owner (2026-11-12):** close hides, the tooltip shows the status, left-click reopens, a second launch focuses, and the switch adds and removes the HKCU Run value.
   5. **Real Mac:** `Resolve-DnsName users-MacBook-Pro.local`, pair with a fresh `bbd pair`, `blackbubbles request '"Diagnose"'` from Windows Terminal, a real iMessage code, the Shortcut endpoint from the iPhone, and Gmail.
   6. **Installer:** `install.ps1`, reboot, and BlackBubbles is in the tray, with toasts named BlackBubbles with its icon.
 

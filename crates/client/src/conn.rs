@@ -78,8 +78,9 @@ impl Client {
         Self { inner, tx, rt }
     }
 
-    pub fn set_autofill(&self, tx: std_mpsc::Sender<bb_autofill::Incoming>) {
-        *self.inner.autofill.lock().unwrap() = Some(tx);
+    /// Where incoming texts go for autofill; `None` stops taking codes from the Mac.
+    pub fn set_autofill(&self, tx: Option<std_mpsc::Sender<bb_autofill::Incoming>>) {
+        *self.inner.autofill.lock().unwrap() = tx;
     }
 
     /// Called for every server event.

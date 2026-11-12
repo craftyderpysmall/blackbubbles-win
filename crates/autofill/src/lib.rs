@@ -50,6 +50,12 @@ impl Autofill {
     pub fn shutdown(&self) {
         self.deliverer.restore_now();
     }
+
+    /// Apply Settings changes (restore delay, notifications) without a restart.
+    pub fn set_options(&self, clear_after_secs: u64, notify: bool) {
+        self.deliverer.set_clear_after(Duration::from_secs(clear_after_secs.max(5)));
+        self.deliverer.set_notifications(notify);
+    }
 }
 
 /// Start the configured sources and the delivery loop.
