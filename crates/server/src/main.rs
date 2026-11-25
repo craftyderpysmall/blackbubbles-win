@@ -3,13 +3,14 @@
 mod auth;
 mod mock;
 
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use bb_proto::{ApiError, Backend, ClientFrame, ErrorCode, Event, PROTOCOL_VERSION, ServerFrame};
+use bb_proto::{ApiError, Backend, ClientFrame, ErrorCode, Event, PROTOCOL_VERSION, Request, Response, ServerFrame};
 use clap::{Parser, Subcommand};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
@@ -68,14 +69,22 @@ fn data_dir(cli: &Cli) -> Result<PathBuf> {
 
 /// This Mac's name for pairing strings: its Bonjour name (`<LocalHostName>.local`).
 fn local_host_name() -> String {
-    let run = |cmd: &str, args: &[&str]| {
-        std::process::Command::new(cmd).args(args).output().ok().and_then(|o| String::from_utf8(o.stdout).ok()).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
-    };
-    run("scutil", &["--get", "LocalHostName"])
+    system_name("/usr/sbin/scutil", &["--get", "LocalHostName"])
         .map(|n| format!("{n}.local"))
         .or_else(|| std::fs::read_to_string("/proc/sys/kernel/hostname").ok().map(|s| s.trim().to_string()))
-        .or_else(|| run("hostname", &[]))
+        .or_else(|| system_name("hostname", &[]))
         .unwrap_or_else(|| "localhost".into())
+}
+
+fn system_name(cmd: &str, args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(cmd).args(args).output().ok()?;
+    let name = String::from_utf8(output.stdout).ok()?;
+    let name = name.trim();
+    (output.status.success() && !name.is_empty()).then(|| name.to_owned())
+}
+
+fn display_name() -> String {
+    system_name("/usr/sbin/scutil", &["--get", "ComputerName"]).unwrap_or_else(local_host_name)
 }
 
 fn main() -> Result<()> {
@@ -129,13 +138,12 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Run { bind, mock, mock_codes, name } => {
-            let backend: Arc<dyn Backend> = if mock {
+            let backend: Arc<dyn ServerBackend> = if mock {
                 Arc::new(mock::MockBackend::new(mock_codes.map(Duration::from_secs)))
             } else {
                 real_backend(&dir)?
             };
             let identity = bb_net::Identity::load_or_create(&dir)?;
-            let name = name.unwrap_or_else(local_host_name);
             // On the Mac, the main thread must run the Cocoa run loop (EventKit needs it; see
             // bb_mac::run_main_loop), so the server runs on its own thread.
             #[cfg(target_os = "macos")]
@@ -190,29 +198,71 @@ fn rpassword_prompt(prompt: &str) -> Result<String> {
     Ok(line.trim_end_matches(['\r', '\n']).to_string())
 }
 
+trait ServerBackend: Backend {
+    fn update_note(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError>;
+}
+
+impl ServerBackend for mock::MockBackend {
+    fn update_note(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError> {
+        self.save_note(id, body, unlocked_here)
+    }
+}
+
 #[cfg(target_os = "macos")]
-fn real_backend(dir: &std::path::Path) -> Result<Arc<dyn Backend>> {
+impl ServerBackend for bb_mac::MacBackend {
+    fn update_note(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError> {
+        self.save_note(id, body, unlocked_here)
+    }
+}
+
+/// Note IDs authorized by a successful password unlock on one connection.
+#[derive(Default)]
+struct NoteAccess(Mutex<HashSet<String>>);
+
+impl NoteAccess {
+    fn handle(&self, backend: &dyn ServerBackend, request: Request) -> Result<Response, ApiError> {
+        match request {
+            Request::UpdateNote { id, body } => {
+                let unlocked_here = self.0.lock().unwrap().contains(&id);
+                backend.update_note(&id, &body, unlocked_here)
+            }
+            Request::UnlockNote { .. } => {
+                let response = backend.handle(request)?;
+                if let Response::Note(note) = &response
+                    && note.summary.locked
+                {
+                    self.0.lock().unwrap().insert(note.summary.id.clone());
+                }
+                Ok(response)
+            }
+            _ => backend.handle(request),
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn real_backend(dir: &std::path::Path) -> Result<Arc<dyn ServerBackend>> {
     Ok(Arc::new(bb_mac::MacBackend::new(dir)?))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn real_backend(_dir: &std::path::Path) -> Result<Arc<dyn Backend>> {
+fn real_backend(_dir: &std::path::Path) -> Result<Arc<dyn ServerBackend>> {
     bail!("the real backend reads Apple data and only runs on macOS; use `bbd run --mock` here")
 }
 
 struct Shared {
     store: auth::Store,
-    backend: Arc<dyn Backend>,
+    backend: Arc<dyn ServerBackend>,
     events: broadcast::Sender<Event>,
-    server_name: String,
+    server_name: Option<String>,
 }
 
 async fn serve(
     bind: SocketAddr,
     identity: bb_net::Identity,
     store: auth::Store,
-    backend: Arc<dyn Backend>,
-    server_name: String,
+    backend: Arc<dyn ServerBackend>,
+    server_name: Option<String>,
 ) -> Result<()> {
     let acceptor = identity.acceptor()?;
     let (events, _) = broadcast::channel(1024);
@@ -330,9 +380,13 @@ async fn session(
             return reject(&mut ws, ErrorCode::Unauthorized, "authenticate first").await;
         }
     };
+    let server_name = match &shared.server_name {
+        Some(name) => name.clone(),
+        None => tokio::task::spawn_blocking(display_name).await?,
+    };
     bb_net::send(&mut ws, &ServerFrame::Welcome {
         protocol: PROTOCOL_VERSION,
-        server_name: shared.server_name.clone(),
+        server_name,
     })
     .await?;
     info!("{peer}: {device:?} connected");
@@ -363,6 +417,9 @@ async fn session(
         }
     });
 
+    // A protected note can only be saved by a connection that proved its password.
+    // This holds note IDs only and is dropped with the connection.
+    let note_access = Arc::new(NoteAccess::default());
     let result = async {
         loop {
             let message = match tokio::time::timeout(CLIENT_SILENCE_LIMIT, stream.next()).await {
@@ -373,8 +430,9 @@ async fn session(
             let Some(frame) = bb_net::from_message::<ClientFrame>(&message?)? else { continue };
             let ClientFrame::Request { id, req } = frame else { continue };
             let (backend, out_tx) = (shared.backend.clone(), out_tx.clone());
+            let note_access = note_access.clone();
             tokio::spawn(async move {
-                let res = tokio::task::spawn_blocking(move || backend.handle(req))
+                let res = tokio::task::spawn_blocking(move || note_access.handle(backend.as_ref(), req))
                     .await
                     .unwrap_or_else(|err| Err(ApiError::internal(format!("handler panicked: {err}"))));
                 let _ = out_tx.send(ServerFrame::Response { id, res }).await;
@@ -387,4 +445,33 @@ async fn session(
     writer.abort();
     info!("{peer}: {device:?} disconnected");
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn protected_note_updates_require_unlock_on_the_same_connection() {
+        let backend = mock::MockBackend::new(None);
+        let current = NoteAccess::default();
+        let new_connection = NoteAccess::default();
+        let id = "n4".to_owned();
+        let body = "Diary\nEdited".to_owned();
+        let update = || Request::UpdateNote { id: id.clone(), body: body.clone() };
+        let unlock = |password: &str| Request::UnlockNote { id: id.clone(), password: password.to_owned() };
+
+        assert_eq!(current.handle(&backend, unlock("wrong")).unwrap_err().code, ErrorCode::PermissionDenied);
+        assert_eq!(current.handle(&backend, update()).unwrap_err().code, ErrorCode::PermissionDenied);
+        current.handle(&backend, unlock("1234")).unwrap();
+        assert_eq!(new_connection.handle(&backend, update()).unwrap_err().code, ErrorCode::PermissionDenied);
+        assert_eq!(current.handle(&backend, update()).unwrap(), Response::Ok);
+
+        let Response::Note(locked) = new_connection.handle(&backend, Request::GetNote { id: id.clone() }).unwrap() else { panic!() };
+        assert!(locked.summary.locked);
+        assert_ne!(locked.body, body);
+        let Response::Note(reopened) = new_connection.handle(&backend, unlock("1234")).unwrap() else { panic!() };
+        assert!(reopened.summary.locked);
+        assert_eq!(reopened.body, body);
+    }
 }

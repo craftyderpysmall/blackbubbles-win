@@ -221,16 +221,19 @@ impl Notes {
     fn summary_sql(s: &Schema, filter: &str) -> String {
         format!(
             "SELECT n.Z_PK, n.{title}, n.ZSNIPPET, n.ZFOLDER, n.{modified}, {locked}
-             FROM {OBJECTS} n LEFT JOIN {OBJECTS} f ON f.Z_PK = n.ZFOLDER
-             WHERE n.Z_ENT = {note} AND {nd} AND {nt} AND {nf} AND n.ZFOLDER IS NOT NULL AND {filter}
+             FROM {OBJECTS} n JOIN {OBJECTS} f ON f.Z_PK = n.ZFOLDER AND f.Z_ENT = {folder}
+             WHERE n.Z_ENT = {note} AND {nd} AND {nf} AND {fd} AND {ff} AND {nt} AND {filter}
              ORDER BY n.{modified} DESC",
             title = s.note_title,
             modified = s.modified,
             locked = if s.has_password { "IFNULL(n.ZISPASSWORDPROTECTED, 0)" } else { "0" },
             note = s.note_ent,
+            folder = s.folder_ent,
             nd = s.not_deleted("n"),
             nt = s.not_trash("f"),
             nf = s.fetched("n"),
+            fd = s.not_deleted("f"),
+            ff = s.fetched("f"),
         )
     }
 
@@ -283,19 +286,7 @@ impl Notes {
         })
     }
 
-    /// Locked notes are encrypted with the user's Notes password; never overwrite one
-    /// with the placeholder text the client was shown.
-    pub fn ensure_unlocked(&self, id: &str) -> Result<(), ApiError> {
-        match self.get(id)? {
-            Response::Note(note) if note.summary.locked => {
-                Err(ApiError::new(ErrorCode::PermissionDenied, "This note is locked. Unlock it in Notes on your Mac to edit it."))
-            }
-            _ => Ok(()),
-        }
-    }
-
-    /// Decrypt a note locked with a Notes password. Read-only: Notes' AppleScript can't
-    /// edit locked notes, and we never write Apple's database.
+    /// Decrypt a note locked with a Notes password without changing its protection.
     pub fn unlock(&self, id: &str, password: &str) -> Result<Response, ApiError> {
         let pk = pk_from_id(id).ok_or_else(|| ApiError::not_found("note"))?;
         self.with_conn(|conn, s| {
@@ -346,7 +337,7 @@ impl Notes {
                 })?;
                 eprintln!("notes: unlock {id}: decrypted via {how}");
                 let body = decode_body(&plain).ok_or_else(|| {
-                    eprintln!("notes: unlock {id}: decrypted {} bytes but they aren't a note body (starts {:02x?})", plain.len(), &plain[..plain.len().min(4)]);
+                    eprintln!("notes: unlock {id}: decrypted {} bytes but couldn't decode the body format", plain.len());
                     ApiError::unsupported("The note decrypted, but its contents are in a format BlackBubbles can't read yet.")
                 })?;
                 return Ok(Response::Note(Note { summary, body }));
@@ -469,12 +460,20 @@ impl Notes {
     /// client's refetch sees it still there.
     pub fn delete(&self, id: &str) -> Result<Response, ApiError> {
         let pk = pk_from_id(id).ok_or_else(|| ApiError::not_found("note"))?;
-        util::osascript(
+        let result = util::osascript(
             r#"on run argv
-                tell application "Notes" to delete note id (item 1 of argv)
+                try
+                    tell application "Notes" to delete note id (item 1 of argv)
+                on error message number code
+                    if code is -1728 then return "missing"
+                    error message number code
+                end try
             end run"#,
             &[id],
         )?;
+        if result == "missing" {
+            return Err(ApiError::not_found("note"));
+        }
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
         while std::time::Instant::now() < deadline {
             let listed = self.with_conn(|conn, s| {
@@ -511,14 +510,60 @@ impl Notes {
         Ok(Response::Created { id })
     }
 
-    pub fn update(id: &str, body: &str) -> Result<Response, ApiError> {
+    pub fn update(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError> {
+        if matches!(self.get(id)?, Response::Note(note) if note.summary.locked) {
+            if !unlocked_here {
+                return Err(ApiError::new(ErrorCode::PermissionDenied, "Unlock this note in BlackBubbles before saving."));
+            }
+            return Self::update_protected(id, body);
+        }
         util::osascript(
             r#"on run argv
-                tell application "Notes" to set body of note id (item 1 of argv) to (item 2 of argv)
+                tell application "Notes"
+                    set n to note id (item 1 of argv)
+                    if password protected of n then error "This note became locked. Reopen it before editing."
+                    set body of n to (item 2 of argv)
+                end tell
             end run"#,
             &[id, &text_to_html(body)],
         )?;
         Ok(Response::Ok)
+    }
+
+    fn update_protected(id: &str, body: &str) -> Result<Response, ApiError> {
+        // Keep protected text out of process arguments and error messages.
+        let input = serde_json::to_vec(&(id, text_to_html(body))).map_err(ApiError::internal)?;
+        let mut command = std::process::Command::new("/usr/bin/osascript");
+        command.args(["-l", "JavaScript", "-e", r#"
+            ObjC.import('Foundation');
+            const bytes = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
+            const [id, html] = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(bytes, $.NSUTF8StringEncoding)));
+            const note = Application('Notes').notes.byId(id);
+            function save() {
+                let before;
+                try {
+                    if (!note.passwordProtected()) return 'changed';
+                    before = note.body();
+                } catch (_) {
+                    return 'locked';
+                }
+                if (!before) return 'locked';
+                if (/<(?:object|img|table)\b|cid:/i.test(before) || note.attachments().length > 0) return 'rich';
+                if (before === html) return 'saved';
+                note.body = html;
+                return note.passwordProtected() && note.body() !== before ? 'saved' : 'unconfirmed';
+            }
+            save();
+        "#]);
+        let output = util::run_with_timeout_input(&mut command, Duration::from_secs(30), Some(input))
+            .map_err(|_| ApiError::internal("Notes did not confirm the save on your Mac."))?;
+        match (output.status.success(), String::from_utf8_lossy(&output.stdout).trim()) {
+            (true, "saved") => Ok(Response::Ok),
+            (true, "locked") => Err(ApiError::new(ErrorCode::PermissionDenied, "Unlock the note in Apple Notes on your Mac, then retry Save here.")),
+            (true, "changed") => Err(ApiError::new(ErrorCode::BadRequest, "The note's protection changed. Reopen it before saving.")),
+            (true, "rich") => Err(ApiError::unsupported("Replacing a protected note with attachments or tables")),
+            _ => Err(ApiError::internal("Apple Notes did not confirm the save. Check the note on your Mac and keep your draft open.")),
+        }
     }
 
     /// Emit `NotesChanged` when the newest modification date moves.
@@ -635,7 +680,10 @@ mod tests {
              -- From the owner's real Mac: a folder never downloaded from iCloud ('E'), and a
              -- note with no folder and date 0 (shown as Dec 31 2000). Notes.app hides both.
              INSERT INTO {OBJECTS} (Z_PK, Z_ENT, ZTITLE2, ZOWNER, ZFOLDERTYPE, ZNEEDSINITIALFETCHFROMCLOUD) VALUES (4, 5, 'E', 1, 0, 1);
+             INSERT INTO {OBJECTS} (Z_PK, Z_ENT, ZTITLE2, ZOWNER, ZMARKEDFORDELETION) VALUES (5, 5, 'Removed', 1, 1);
              INSERT INTO {OBJECTS} (Z_PK, Z_ENT, ZTITLE1, ZFOLDER, ZMODIFICATIONDATE1) VALUES (13, 12, 'New Note', NULL, 0.0);
+             INSERT INTO {OBJECTS} (Z_PK, Z_ENT, ZFOLDER) VALUES
+                 (14, 12, 999), (15, 12, 4), (16, 12, 5), (17, 12, 1);
              CREATE TABLE ZICNOTEDATA (Z_PK INTEGER PRIMARY KEY, ZNOTE INTEGER, ZDATA BLOB);"
         ))
         .unwrap();
@@ -650,7 +698,7 @@ mod tests {
         let Response::Notes(list) = notes.list(Some(&folders[0].id)).unwrap() else { panic!() };
         assert_eq!(list.iter().map(|n| n.title.as_str()).collect::<Vec<_>>(), ["Groceries", "Secret"]);
         let Response::Notes(all) = notes.list(None).unwrap() else { panic!() };
-        assert!(all.iter().all(|n| n.title != "New Note"), "a note without a folder is hidden");
+        assert_eq!(all, list, "notes with unavailable folders are hidden");
         assert_eq!(list[0].id, "x-coredata://UUID-1/ICNote/p10");
 
         let Response::Note(note) = notes.get(&list[0].id).unwrap() else { panic!() };
@@ -658,8 +706,7 @@ mod tests {
         let Response::Note(locked) = notes.get(&list[1].id).unwrap() else { panic!() };
         assert!(locked.body.contains("locked"));
         assert!(locked.summary.locked && !list[0].locked);
-        assert!(notes.ensure_unlocked(&list[0].id).is_ok());
-        assert_eq!(notes.ensure_unlocked(&list[1].id).unwrap_err().code, ErrorCode::PermissionDenied);
+        assert_eq!(notes.update(&list[1].id, "edited", false).unwrap_err().code, ErrorCode::PermissionDenied);
 
         // Encrypt a body for the locked note the way Notes does, then unlock it.
         let (wrapped, iv, tag, data) = crate::notecrypt::encrypt_for_test("pw", b"0123456789abcdef", 2000, &note_blob("Secret\nthe code is 1234"));

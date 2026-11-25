@@ -135,8 +135,24 @@ pub(crate) enum RunError {
 
 /// Run a command, killing it if it outlives `timeout`.
 pub(crate) fn run_with_timeout(cmd: &mut std::process::Command, timeout: std::time::Duration) -> Result<std::process::Output, RunError> {
+    run_with_timeout_input(cmd, timeout, None)
+}
+
+pub(crate) fn run_with_timeout_input(
+    cmd: &mut std::process::Command,
+    timeout: std::time::Duration,
+    input: Option<Vec<u8>>,
+) -> Result<std::process::Output, RunError> {
+    use std::io::Write;
     use std::process::Stdio;
-    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(RunError::Io)?;
+    let stdin = if input.is_some() { Stdio::piped() } else { Stdio::null() };
+    let mut child = cmd.stdin(stdin).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(RunError::Io)?;
+    if let (Some(mut stdin), Some(input)) = (child.stdin.take(), input) {
+        std::thread::spawn(move || {
+            // The subprocess reports its own read failures. Closing the pipe sends EOF.
+            let _ = stdin.write_all(&input);
+        });
+    }
     let start = std::time::Instant::now();
     loop {
         if child.try_wait().map_err(RunError::Io)?.is_some() {
@@ -187,6 +203,7 @@ pub fn escape_html(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     #[test]
     fn commands_time_out() {
         let slow = super::run_with_timeout(std::process::Command::new("sleep").arg("5"), std::time::Duration::from_millis(300));
@@ -195,6 +212,7 @@ mod tests {
         assert_eq!(String::from_utf8_lossy(&fast.ok().unwrap().stdout).trim(), "hi");
     }
 
+    #[cfg(unix)]
     #[test]
     fn opens_wal_database_without_shm() {
         let dir = std::env::temp_dir().join(format!("bb util wal {}", std::process::id()));

@@ -121,6 +121,12 @@ impl MacBackend {
     }
 }
 
+impl MacBackend {
+    pub fn save_note(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError> {
+        self.notes.update(id, body, unlocked_here)
+    }
+}
+
 impl Backend for MacBackend {
     fn handle(&self, req: Request) -> Result<Response, ApiError> {
         match req {
@@ -134,10 +140,7 @@ impl Backend for MacBackend {
             Request::ListNotes { folder_id } => self.notes.list(folder_id.as_deref()),
             Request::GetNote { id } => self.notes.get(&id),
             Request::CreateNote { folder_id, body } => notes::Notes::create(folder_id.as_deref(), &body),
-            Request::UpdateNote { id, body } => {
-                self.notes.ensure_unlocked(&id)?;
-                notes::Notes::update(&id, &body)
-            }
+            Request::UpdateNote { id, body } => self.save_note(&id, &body, false),
             Request::ListVoiceMemos => self.voice_memos.list(),
             Request::UnlockNote { id, password } => self.notes.unlock(&id, &password),
             Request::DeleteNote { id } => self.notes.delete(&id),

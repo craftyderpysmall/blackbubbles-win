@@ -38,6 +38,22 @@ impl MockBackend {
             });
         }
     }
+
+    pub fn save_note(&self, id: &str, body: &str, unlocked_here: bool) -> Result<Response, ApiError> {
+        let mut state = self.state.lock().unwrap();
+        let current = state.notes.iter_mut().find(|n| n.summary.id == id).ok_or_else(|| ApiError::not_found("note"))?;
+        let locked = current.summary.locked;
+        if locked && !unlocked_here {
+            return Err(ApiError::new(ErrorCode::PermissionDenied, "Unlock this note in BlackBubbles before saving."));
+        }
+        *current = note(id, &current.summary.folder_id, body.lines().next().unwrap_or(""), body, now_ms());
+        if locked {
+            current.summary.locked = true;
+            current.summary.snippet = "Locked".into();
+        }
+        self.emit_later(Event::NotesChanged);
+        Ok(Response::Ok)
+    }
 }
 
 impl MockBackend {
@@ -192,10 +208,9 @@ fn note(id: &str, folder: &str, title: &str, body: &str, modified: i64) -> Note 
 }
 
 fn locked_note(id: &str, folder: &str, title: &str, modified: i64) -> Note {
-    let mut n = note(id, folder, title, "", modified);
+    let mut n = note(id, folder, title, &format!("{title}\nDear diary, the mock password is 1234 🔓"), modified);
     n.summary.snippet = "Locked".into();
     n.summary.locked = true;
-    n.body = "🔒 This note is locked. Unlock it in Notes on your Mac.".into();
     n
 }
 
@@ -263,6 +278,9 @@ fn slice_blob(data: Vec<u8>, offset: u64, len: u32, mime: &str) -> Result<Respon
 
 impl Backend for MockBackend {
     fn handle(&self, req: Request) -> Result<Response, ApiError> {
+        if let Request::UpdateNote { id, body } = req {
+            return self.save_note(&id, &body, false);
+        }
         let mut state = self.state.lock().unwrap();
         let state = &mut *state;
         Ok(match req {
@@ -371,9 +389,13 @@ impl Backend for MockBackend {
                     .map(|n| n.summary.clone())
                     .collect(),
             ),
-            Request::GetNote { id } => Response::Note(
-                state.notes.iter().find(|n| n.summary.id == id).cloned().ok_or_else(|| ApiError::not_found("note"))?,
-            ),
+            Request::GetNote { id } => {
+                let mut note = state.notes.iter().find(|n| n.summary.id == id).cloned().ok_or_else(|| ApiError::not_found("note"))?;
+                if note.summary.locked {
+                    note.body = "🔒 This note is locked.".into();
+                }
+                Response::Note(note)
+            }
             Request::CreateNote { folder_id, body } => {
                 state.next_id += 1;
                 let id = format!("n{}", state.next_id);
@@ -382,16 +404,7 @@ impl Backend for MockBackend {
                 self.emit_later(Event::NotesChanged);
                 Response::Created { id }
             }
-            Request::UpdateNote { id, body } => {
-                let n = state.notes.iter_mut().find(|n| n.summary.id == id).ok_or_else(|| ApiError::not_found("note"))?;
-                if n.summary.locked {
-                    return Err(ApiError::new(ErrorCode::PermissionDenied, "This note is locked. Unlock it in Notes on your Mac to edit it."));
-                }
-                let updated = note(&id, &n.summary.folder_id.clone(), body.lines().next().unwrap_or(""), &body, now_ms());
-                *n = updated;
-                self.emit_later(Event::NotesChanged);
-                Response::Ok
-            }
+            Request::UpdateNote { .. } => unreachable!("handled before locking state"),
             Request::UnlockNote { id, password } => {
                 let n = state.notes.iter().find(|n| n.summary.id == id).ok_or_else(|| ApiError::not_found("note"))?;
                 if !n.summary.locked {
@@ -400,12 +413,14 @@ impl Backend for MockBackend {
                 if password != "1234" {
                     return Err(ApiError::new(ErrorCode::PermissionDenied, "Wrong password. (The mock's password is 1234.)"));
                 }
-                let mut open = n.clone();
-                open.body = format!("{}\nDear diary, the mock password is 1234 🔓", n.summary.title);
-                Response::Note(open)
+                Response::Note(n.clone())
             }
             Request::DeleteNote { id } => {
+                let count = state.notes.len();
                 state.notes.retain(|n| n.summary.id != id);
+                if state.notes.len() == count {
+                    return Err(ApiError::not_found("note"));
+                }
                 self.emit_later(Event::NotesChanged);
                 Response::Ok
             }

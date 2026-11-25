@@ -2,7 +2,7 @@
 
 Your Apple world on **Windows**: Messages, Photos, Notes, Calendar, Reminders, Voice Memos and Find My, plus iOS-style verification code autofill. It is a [Tauri](https://tauri.app) app (Rust core, React UI on WebView2) that talks to a small Rust daemon, `bbd`, on your Mac.
 
-This is the Windows port of [BlackBubbles](https://github.com/craftyderpysmall/blackbubbles) (forked from upstream commit `9918918`). It speaks the same protocol (version 7) to the same `bbd`, so a Mac set up for the Linux client works unchanged. It is not based on BlueBubbles.
+This is the Windows port of [BlackBubbles](https://github.com/craftyderpysmall/blackbubbles) (forked from upstream commit `9918918`). It uses BlackBubbles protocol 7 and can pair with existing version 7 servers. The Mac-side fixes in this repository require its build of `bbd`.
 
 > **Status:** early. The upstream client is in daily use on one Mac; this Windows port is new. Messages (with contact names), Notes and Find My run against real data; Photos, Calendar and Reminders are tested against the mock server but not yet on a real Mac. Expect rough edges.
 
@@ -12,7 +12,7 @@ This is the Windows port of [BlackBubbles](https://github.com/craftyderpysmall/b
 |---|---|---|
 | **Messages** | iMessage and SMS chats with contact names and group events, history, sending text and files (drag & drop), images inline, Save As | Reads `chat.db` directly and sends through AppleScript |
 | **Photos** | Your library and albums in a fast thumbnail grid, full-size viewer, save to disk | PhotoKit, rendered to JPEG (no HEIC on the client) |
-| **Notes** | Folders, search, read, edit, new and delete. Password-locked notes open read-only with your Notes password (passcode-locked ones can't) | Reads `NoteStore.sqlite` and decrypts locked notes locally; edits go through AppleScript |
+| **Notes** | Folders, search, create, edit and delete. Open notes protected by a custom Notes password in BlackBubbles, then unlock them in Apple Notes on the Mac before saving edits. | Reads `NoteStore.sqlite` and saves through Notes.app automation |
 | **Calendar** | Month grid, agenda, create and delete events; reminders with a date show on their day | EventKit |
 | **Reminders** | Today / Scheduled / All / Completed, your lists, add, tick off, delete; timed reminders alert on your iPhone too | EventKit (the Reminders app's store) |
 | **Voice Memos** | List, play, seek, save | Recordings database and audio files |
@@ -56,12 +56,9 @@ On Windows:
 
 ## Design
 
-The UI follows the "Neutral" desktop theme:
-- **Look:** monochrome dark and shadcn-style. Colour is used only for state (status dots, low battery, email-address warnings).
-- **Shape:** 16 px cards, 10 px controls and pill buttons, with one inverted white primary action per surface.
-- **Type and icons:** Inter and Lucide icons are bundled (OFL and ISC licences). Emoji render in colour with Windows' Segoe UI Emoji, including skin tones and ZWJ sequences. A bundled Noto subset fills in emoji newer than Windows' font. Flags show as letter pairs, as they do everywhere on Windows.
-- **Motion:** quick decelerating enter and accelerating exit animations.
-- **Responsive:** the rail collapses to icons, and Messages, Notes and Find My go single-pane on narrow windows. Calendar stacks its agenda under the month and shrinks events to dots.
+BlackBubbles uses a true-black canvas, layered graphite surfaces, and silver-violet focus and selection. Cormorant Garamond gives workspace headings an editorial serif. Inter serves controls and reading text, and JetBrains Mono serves code and numeric detail.
+
+The service bar becomes a labeled menu as the window narrows. Notes, Messages, Reminders, and Find My switch from split workspaces to one pane. Calendar stacks the agenda below the month, and playback moves below the Voice Memos list. See [DESIGN.md](DESIGN.md) for tokens, component states, and workspace layouts.
 
 ## Layout
 
@@ -80,7 +77,7 @@ install.ps1      build and install on Windows (per-user, no admin)
 
 ## Getting started
 
-1. **Mac:** follow [docs/MAC_SETUP.md](docs/MAC_SETUP.md). Skip this if your Mac already runs `bbd` for the Linux client.
+1. **Mac:** follow [docs/MAC_SETUP.md](docs/MAC_SETUP.md) to install or update `bbd`.
 2. **Windows:** follow [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). In short: install Rust, Node and the MSVC Build Tools, run `install.ps1`, then pair in Settings.
 
 You can try the client without a Mac by running the mock server:
