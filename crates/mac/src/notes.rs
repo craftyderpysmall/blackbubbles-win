@@ -621,11 +621,22 @@ impl Notes {
     /// which leaves the modification date alone) and the newest modification date.
     pub fn watch(self: std::sync::Arc<Self>, sink: EventSink) {
         std::thread::spawn(move || {
-            let mut last: Option<(i64, i64, f64)> = None;
+            let mut last: Option<(i64, i64, f64, i64)> = None;
             loop {
                 std::thread::sleep(Duration::from_secs(2));
                 if let Ok(now) = self.fingerprint() {
                     if last.is_some_and(|l| l != now) {
+                        // Timestamped (UTC) so a slow iCloud delivery can be told apart from a
+                        // slow client: compare it with when the edit was made on the other device.
+                        let secs = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_or(0, |d| d.as_secs());
+                        eprintln!(
+                            "notes: database changed at {:02}:{:02}:{:02} UTC",
+                            secs / 3600 % 24,
+                            secs / 60 % 60,
+                            secs % 60
+                        );
                         sink(Event::NotesChanged);
                     }
                     last = Some(now);
@@ -634,14 +645,26 @@ impl Notes {
         });
     }
 
-    fn fingerprint(&self) -> Result<(i64, i64, f64), ApiError> {
+    /// Also covers the body table, so an iCloud merge that rewrites only a note's text
+    /// (and not its object row) still counts as a change.
+    fn fingerprint(&self) -> Result<(i64, i64, f64, i64), ApiError> {
         self.with_conn(|conn, s| {
-            conn.query_row(
-                &format!("SELECT COUNT(*), IFNULL(SUM(Z_OPT), 0), IFNULL(MAX({}), 0) FROM {OBJECTS}", s.modified),
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-            )
-            .map_err(sql_err)
+            let (count, opt, modified) = conn
+                .query_row(
+                    &format!("SELECT COUNT(*), IFNULL(SUM(Z_OPT), 0), IFNULL(MAX({}), 0) FROM {OBJECTS}", s.modified),
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .map_err(sql_err)?;
+            let body_opt = if util::columns(conn, "ZICNOTEDATA").iter().any(|c| c == "Z_OPT") { "SUM(Z_OPT)" } else { "0" };
+            let body: i64 = conn
+                .query_row(
+                    &format!("SELECT IFNULL({body_opt}, 0) + IFNULL(SUM(LENGTH(ZDATA)), 0) FROM ZICNOTEDATA"),
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(sql_err)?;
+            Ok((count, opt, modified, body))
         })
     }
 }
