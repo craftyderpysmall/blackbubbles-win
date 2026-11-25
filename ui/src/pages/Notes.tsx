@@ -10,6 +10,12 @@ import { shortTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, Center, Chip, Dialog, EmptyState, IconButton, Input, PaneHeader, SearchInput, Spinner, WorkspaceHeading, menuItem, menuSeparator, menuSurface } from "@/components/ui";
 
+/** Pause after the last keystroke before saving to the Mac. */
+const AUTOSAVE_MS = 1200;
+
+/** Equal apart from whitespace (Notes' HTML round trip can change line breaks and spaces). */
+const sameText = (a: string, b: string) => a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
+
 export default function NotesPage() {
   const { connected, config, tab, toast } = useApp();
   const qc = useQueryClient();
@@ -51,8 +57,13 @@ export default function NotesPage() {
   // Load the note, and reload it after a change on the Mac unless it has unsaved edits.
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
   useEffect(() => {
     if (note.data && !note.data.summary.locked && !dirtyRef.current) {
+      // Our own save comes back from Notes' HTML with whitespace that can differ from
+      // what was typed. Replacing the text then would move the caret mid-sentence.
+      if (sameText(note.data.body, savedRef.current)) return;
       setBody(note.data.body);
       setSaved(note.data.body);
     }
@@ -87,6 +98,28 @@ export default function NotesPage() {
     inFlightSave.current = task;
     return task;
   }, [open, body, dirty, locked, needsUnlock, connected, pending, qc, toast]);
+
+  // Notes on the Mac and iPhone save as you type, so save here once typing pauses, and
+  // when leaving the note for another service or hiding the window. A failed save waits
+  // for the next edit (which clears the error) instead of retrying on its own.
+  const canAutoSave = dirty && !saving && !saveError && !needsUnlock && connected && !!open && !pending.has(open);
+  useEffect(() => {
+    if (!canAutoSave) return;
+    const timer = setTimeout(() => void save(), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [canAutoSave, save]);
+  const leave = useRef(() => {});
+  leave.current = () => {
+    if (dirty && !saveError && !needsUnlock && connected) void save();
+  };
+  useEffect(() => {
+    if (tab !== "notes") leave.current();
+  }, [tab]);
+  useEffect(() => {
+    const onHide = () => document.visibilityState === "hidden" && leave.current();
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, []);
 
   const resetEditor = () => {
     setBody("");
@@ -264,7 +297,10 @@ export default function NotesPage() {
                   key={open}
                   autoFocus
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    if (saveError) setSaveError(null);
+                  }}
                   spellCheck={!locked}
                   autoComplete="off"
                   aria-label="Note body"
