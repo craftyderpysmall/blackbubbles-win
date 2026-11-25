@@ -56,7 +56,7 @@ On Windows:
 
 ## Design
 
-BlackBubbles uses a true-black canvas, layered graphite surfaces, and silver-violet focus and selection. Cormorant Garamond gives workspace headings an editorial serif. Inter serves controls and reading text, and JetBrains Mono serves code and numeric detail.
+BlackBubbles uses the dark mode of a Claude-inspired system: neutral near-black surfaces, white and grey text, and coral as the single accent for primary actions, focus and links. Cormorant Garamond sets the serif workspace headlines, Inter serves controls and reading text, and JetBrains Mono serves code and numeric detail.
 
 The service bar becomes a labeled menu as the window narrows. Notes, Messages, Reminders, and Find My switch from split workspaces to one pane. Calendar stacks the agenda below the month, and playback moves below the Voice Memos list. See [DESIGN.md](DESIGN.md) for tokens, component states, and workspace layouts.
 

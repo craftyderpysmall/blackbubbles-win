@@ -4,40 +4,36 @@ import { AudioLines, Bell, Calendar, Check, Image, Info, Keyboard, LayoutGrid, L
 import { errorText, native, type ConfigView, type Notifications, type Services } from "@/lib/bb";
 import { useApp } from "@/lib/app";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, Input, Switch, WorkspaceHeading } from "@/components/ui";
+import { Badge, Button, Card, CodeWindow, Input, Switch, WorkspaceHeading } from "@/components/ui";
 
 function Section({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description?: string; children: ReactNode }) {
   return (
-    <Card className="p-4 sm:p-6">
-      <div className="flex items-center gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-control border border-border-strong bg-raised">
-          <Icon className="size-4 text-fg" />
-        </span>
-        <h2 className="text-lg font-medium text-fg">{title}</h2>
-      </div>
-      {description && <p className="mt-2 text-sm text-muted">{description}</p>}
-      <div className="mt-3">{children}</div>
+    <Card className="p-5 sm:p-8">
+      <Icon className="mb-4 size-5 text-muted-soft" aria-hidden />
+      <h2 className="heading-md">{title}</h2>
+      {description && <p className="mt-2 max-w-prose text-sm text-muted">{description}</p>}
+      <div className="mt-5">{children}</div>
     </Card>
   );
 }
 
 function Group({ title, children, off }: { title: string; children: ReactNode; off?: boolean }) {
   return (
-    <div className={cn("mt-3 first:mt-0", off && "pointer-events-none opacity-40")} title={off ? `${title} is hidden in Services` : undefined}>
-      <div className="mb-0.5 px-1 text-[11px] font-medium tracking-wide text-subtle uppercase">{title}</div>
-      <div className="divide-y divide-border">{children}</div>
+    <div className={cn("mt-6 first:mt-0", off && "pointer-events-none opacity-40")} title={off ? `${title} is hidden in Services` : undefined}>
+      <div className="border-b border-hairline pb-2 text-[13px] font-medium text-muted-soft">{title}</div>
+      <div className="divide-y divide-hairline">{children}</div>
     </div>
   );
 }
 
 function Nested({ children, disabled }: { children: ReactNode; disabled?: boolean }) {
-  return <div className={cn("ml-4 border-l border-border pl-3", disabled && "pointer-events-none opacity-40")}>{children}</div>;
+  return <div className={cn("ml-4 border-l border-hairline pl-3", disabled && "pointer-events-none opacity-40")}>{children}</div>;
 }
 
 function NumberField({ label, suffix, value, min, max, onChange, disabled }: { label: string; suffix: string; value: number; min: number; max: number; onChange: (v: number) => void; disabled?: boolean }) {
   return (
-    <label className={cn("flex items-center justify-between gap-4 px-1 py-2", disabled && "opacity-40")}>
-      <span className="text-[13px] text-fg">{label}</span>
+    <label className={cn("flex items-center justify-between gap-4 py-3", disabled && "opacity-40")}>
+      <span className="text-sm text-ink">{label}</span>
       <span className="flex items-center gap-2">
         <Input
           type="number"
@@ -51,14 +47,14 @@ function NumberField({ label, suffix, value, min, max, onChange, disabled }: { l
           }}
           className="h-8 w-20 text-right"
         />
-        <span className="w-6 text-xs text-subtle">{suffix}</span>
+        <span className="w-6 text-xs text-muted-soft">{suffix}</span>
       </span>
     </label>
   );
 }
 
-function Code({ children }: { children: ReactNode }) {
-  return <code className="selectable block overflow-x-auto rounded-control border border-border bg-deep px-4 py-3 font-mono text-[13px] whitespace-pre text-body">{children}</code>;
+function Code({ tab, children }: { tab?: string; children: ReactNode }) {
+  return <CodeWindow tab={tab}>{children}</CodeWindow>;
 }
 
 export default function SettingsPage() {
@@ -66,9 +62,12 @@ export default function SettingsPage() {
   const sectionScroll = useRef<HTMLDivElement>(null);
   return (
     <section className="flex h-full flex-col">
-      <WorkspaceHeading title="Settings" />
+      <WorkspaceHeading
+        title={config.server ? "Settings" : "Pair with your Mac"}
+        detail={config.server ? `BlackBubbles ${boot.version}` : "Run one command on the Mac, paste the URI, and your Apple services appear here."}
+      />
       <Tabs.Root defaultValue="connection" onValueChange={() => sectionScroll.current?.scrollTo(0, 0)} className="flex min-h-0 flex-1 flex-col gap-4 sm:gap-6">
-        <Tabs.List aria-label="Settings sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border pb-3">
+        <Tabs.List aria-label="Settings sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-hairline pb-3 [scrollbar-width:none]">
           {[
             ["connection", "Connection"],
             ["services", "Services"],
@@ -79,7 +78,7 @@ export default function SettingsPage() {
             <Tabs.Trigger
               key={id}
               value={id}
-              className="h-9 shrink-0 rounded-control px-3 text-sm font-medium text-muted hover:bg-hover data-[state=active]:bg-selected data-[state=active]:text-fg"
+              className="nav-label h-8 shrink-0 rounded-control px-3.5 text-[13px] text-muted transition-colors hover:text-ink data-[state=active]:bg-elevated data-[state=active]:text-ink"
             >
               {label}
             </Tabs.Trigger>
@@ -104,11 +103,11 @@ export default function SettingsPage() {
             <Section icon={Info} title="About">
               <div className="selectable space-y-1 break-words text-sm text-muted">
                 <div>BlackBubbles {boot.version}</div>
-                <div className="text-subtle">Settings file: {boot.config_path}</div>
-                <div className="text-subtle">
+                <div className="text-muted-soft">Settings file: {boot.config_path}</div>
+                <div className="text-muted-soft">
                   {boot.primary ? "This app handles autofill and notifications, also while it's in the tray." : "Another BlackBubbles process handles autofill and notifications."}
                 </div>
-                {!config.server && <div className="text-subtle">Not paired yet.</div>}
+                {!config.server && <div className="text-muted-soft">Not paired yet.</div>}
               </div>
             </Section>
           </Tabs.Content>
@@ -143,7 +142,7 @@ function Connection() {
         ? ["Connecting…", "var(--color-warning)"]
         : status.state === "Disconnected"
           ? [`Offline: ${status.detail}`, "var(--color-danger)"]
-          : ["Not paired", "var(--color-subtle)"];
+          : ["Not paired", "var(--color-muted-soft)"];
 
   const pair = async () => {
     if (busy || !uri.trim().startsWith("blackbubbles://")) return;
@@ -167,12 +166,12 @@ function Connection() {
       </div>
       {config.server && (
         <div className="mt-3">
-          <Code>{config.server.host}:{config.server.port} · pinned {config.server.fingerprint.slice(0, 12)}…</Code>
+          <Code tab="Pinned Mac">{config.server.host}:{config.server.port} · pinned {config.server.fingerprint.slice(0, 12)}…</Code>
         </div>
       )}
       <div className="mt-4 space-y-2">
         <p className="text-sm text-muted" id="pairing-help">Run this command on your Mac and paste the pairing URI below.</p>
-        <Code>bbd pair --host &lt;Mac hostname or Tailscale IP&gt;</Code>
+        <Code tab="Terminal on the Mac">bbd pair --host &lt;Mac hostname or Tailscale IP&gt;</Code>
       </div>
       <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); void pair(); }}>
         <label className="grid gap-1.5 text-sm text-body">
@@ -204,7 +203,7 @@ function Connection() {
 function SendingAddress() {
   return (
     <Section icon={Phone} title="Sending address" description="Messages go out from the address your Mac uses for each conversation. BlackBubbles never picks email on its own.">
-      <div className="text-[13px] text-fg">To send from your phone number:</div>
+      <div className="text-[13px] text-ink">To send from your phone number:</div>
       <ul className="mt-2 space-y-2">
         {[
           "On your iPhone: Settings → Messages → Send & Receive → under “Start New Conversations From”, choose your phone number.",
@@ -237,7 +236,7 @@ function ServiceSettings() {
   const v = config.services;
   return (
     <Section icon={LayoutGrid} title="Services" description="Choose which Apple services BlackBubbles shows. A hidden service gets no tab and no notifications. Autofill keeps working either way.">
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-hairline">
         {SERVICES.map(([key, Icon, name, hint]) => (
           <div key={key} className="flex items-center gap-3">
             <Icon className="size-4 shrink-0 text-muted" />
@@ -284,7 +283,7 @@ function NotificationSettings() {
             {sw("show_preview", "Show message preview", "Off: “New message” instead of the text")}
             {sw("skip_codes", "Skip verification-code texts", "Autofill already shows those")}
             {sw("only_when_unfocused", "Only when BlackBubbles isn't focused")}
-            <div className="flex items-center justify-between gap-2 px-1 py-2 text-xs text-subtle">
+            <div className="flex items-center justify-between gap-2 px-1 py-2 text-xs text-muted-soft">
               {n.muted_chats.length ? (
                 <>
                   <span>{n.muted_chats.length} muted conversation{n.muted_chats.length > 1 ? "s" : ""}</span>
@@ -321,17 +320,17 @@ function NotificationSettings() {
           {sw("quiet_hours", "Quiet hours", "Nothing is shown during this window")}
           <Nested disabled={!n.quiet_hours}>
             <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-2">
-              <span className="text-[13px] text-fg">From</span>
+              <span className="text-[13px] text-ink">From</span>
               <span className="flex items-center gap-2">
                 <Input type="time" aria-label="Quiet hours start" value={n.quiet_start} onChange={(e) => e.target.value && set({ quiet_start: e.target.value })} className="h-8 w-24" />
-                <span className="text-xs text-subtle">to</span>
+                <span className="text-xs text-muted-soft">to</span>
                 <Input type="time" aria-label="Quiet hours end" value={n.quiet_end} onChange={(e) => e.target.value && set({ quiet_end: e.target.value })} className="h-8 w-24" />
               </span>
             </div>
           </Nested>
         </Group>
       </div>
-      <p className="mt-3 text-xs text-subtle">Shown while BlackBubbles runs, including when the window is closed to the tray.</p>
+      <p className="mt-3 text-xs text-muted-soft">Shown while BlackBubbles runs, including when the window is closed to the tray.</p>
     </Section>
   );
 }
@@ -346,7 +345,7 @@ function StartupSettings() {
     native.setAutostart(v).then(setAutostart, (e) => toast(`Couldn't change Start at login: ${errorText(e)}`));
   return (
     <Section icon={Power} title="Startup" description="Closing the window keeps BlackBubbles in the tray, so codes and notifications still arrive. Quit it from the tray icon's menu.">
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-hairline">
         <Switch checked={!!autostart} disabled={autostart === null} onChange={(v) => void change(v)} label="Start at login" description="Starts in the tray when you sign in to Windows" />
       </div>
     </Section>
@@ -363,7 +362,7 @@ function AutofillSettings() {
 
   return (
     <Section icon={Keyboard} title="Autofill" description="Verification codes and links from texts and email go straight to your clipboard.">
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-hairline">
         <Switch checked={a.enabled} onChange={(v) => set({ enabled: v })} label="Enabled" />
         <Switch checked={a.from_server} onChange={(v) => set({ from_server: v })} label="Codes from iMessage / SMS on the Mac" />
         <Switch checked={a.notify} onChange={(v) => set({ notify: v })} label="Click-to-paste notification" description="Off: codes are copied silently" />
@@ -374,13 +373,13 @@ function AutofillSettings() {
           {a.http ? (
             <>
               <div className="text-xs text-muted">POST http://&lt;this computer&gt;.local:{a.http.port}/message</div>
-              <Code>Authorization: Bearer {a.http.token}</Code>
-              <div className="text-xs text-subtle">The first time, Windows Firewall asks whether BlackBubbles may accept connections: allow <span className="text-muted">private networks</span> only.</div>
+              <Code tab="Shortcut header">Authorization: Bearer {a.http.token}</Code>
+              <div className="text-xs text-muted-soft">The first time, Windows Firewall asks whether BlackBubbles may accept connections: allow <span className="text-muted">private networks</span> only.</div>
               <Button variant="outline" size="sm" onClick={() => void save(native.autofillHttp(false))}>Disable endpoint</Button>
             </>
           ) : (
             <>
-              <div className="text-xs text-subtle">Works even when the Mac is offline.</div>
+              <div className="text-xs text-muted-soft">Works even when the Mac is offline.</div>
               <Button variant="outline" size="sm" icon={Plus} onClick={() => void save(native.autofillHttp(true))}>Enable with a new token</Button>
             </>
           )}
@@ -391,7 +390,7 @@ function AutofillSettings() {
           {a.gmail.map((g) => (
             <div key={g} className="flex items-center gap-2">
               <Mail className="size-4 text-muted" />
-              <span className="flex-1 truncate text-[13px] text-fg">{g}</span>
+              <span className="flex-1 truncate text-[13px] text-ink">{g}</span>
               <Button size="sm" icon={Trash2} onClick={() => void save(native.gmailRemove(g))}>Remove</Button>
             </div>
           ))}
@@ -408,7 +407,7 @@ function AutofillSettings() {
           </form>
         </div>
       </Group>
-      <p className="mt-2 text-xs text-subtle">Turning autofill on or off, the Shortcut endpoint and Gmail apply after quitting BlackBubbles from the tray and starting it again. Everything else applies at once.</p>
+      <p className="mt-2 text-xs text-muted-soft">Turning autofill on or off, the Shortcut endpoint and Gmail apply after quitting BlackBubbles from the tray and starting it again. Everything else applies at once.</p>
     </Section>
   );
 }

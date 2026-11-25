@@ -28,18 +28,20 @@ export default function PhotosPage() {
   });
   const list = useMemo(() => assets.data?.pages.flat() ?? [], [assets.data]);
   const current = viewing !== null ? list[viewing] : undefined;
+  const shownAlbum = albums.data?.find((a) => a.id === album);
+  const albumDetail = shownAlbum ? `${shownAlbum.title}${shownAlbum.count ? ` · ${shownAlbum.count.toLocaleString()} items` : ""}` : connected ? undefined : "Pair with your Mac to browse your library.";
 
   return (
     <section className="flex h-full flex-col">
-      <WorkspaceHeading title="Photos">
-        <Button variant="outline" icon={RotateCw} onClick={() => void (albums.refetch(), assets.refetch())}>Refresh</Button>
+      <WorkspaceHeading title="Photos" detail={albumDetail}>
+        <Button variant="secondary" icon={RotateCw} onClick={() => void (albums.refetch(), assets.refetch())}>Refresh</Button>
       </WorkspaceHeading>
-      <div className="mb-3 border-b border-border pb-3">
+      <div className="mb-4 border-b border-hairline pb-3">
         <div aria-label="Photo albums" className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none]">
           {(albums.data ?? [{ id: "all", title: "Recents", count: 0 }]).map((a) => (
             <Chip key={a.id} active={a.id === album} onClick={() => setAlbum(a.id)}>
               {a.title}
-              {a.count > 0 && <span className="opacity-60">{a.count}</span>}
+              {a.count > 0 && <span className="text-muted-soft">{a.count}</span>}
             </Chip>
           ))}
         </div>
@@ -107,7 +109,7 @@ function Grid({ assets, onOpen, onNearEnd }: { assets: Asset[]; onOpen: (i: numb
 function Tile({ asset, size, onClick }: { asset: Asset; size: number; onClick: () => void }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <button aria-label={`Open ${asset.is_video ? "video" : "photo"} from ${longTime(asset.created)}`} onClick={onClick} className="group relative shrink-0 overflow-hidden rounded-control bg-raised ring-1 ring-inset ring-border" style={{ width: size, height: size }}>
+    <button aria-label={`Open ${asset.is_video ? "video" : "photo"} from ${longTime(asset.created)}`} onClick={onClick} className="group relative shrink-0 overflow-hidden rounded-control bg-card ring-1 ring-inset ring-hairline" style={{ width: size, height: size }}>
       <img
         src={blobUrl("PhotoThumbnail", asset.id)}
         alt=""
@@ -118,12 +120,12 @@ function Tile({ asset, size, onClick }: { asset: Asset; size: number; onClick: (
         style={{ opacity: loaded ? 1 : 0 }}
       />
       {asset.is_video && (
-        <span className="absolute right-2 bottom-2 flex size-5 items-center justify-center rounded-full bg-black/65 text-white">
+        <span className="absolute right-2 bottom-2 flex size-6 items-center justify-center rounded-full border border-hairline-strong bg-deep/80 text-ink">
           <Play className="size-3 fill-current" />
         </span>
       )}
       {asset.favorite && (
-        <span className="absolute left-2 bottom-2 flex size-5 items-center justify-center rounded-full bg-black/65 text-white">
+        <span className="absolute left-2 bottom-2 flex size-6 items-center justify-center rounded-full border border-hairline-strong bg-deep/80 text-ink">
           <Heart className="size-3 fill-current" />
         </span>
       )}

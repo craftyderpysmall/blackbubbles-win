@@ -7,7 +7,8 @@ import { api, errorText, native, saveAs, type AudioState, type VoiceMemo } from 
 import { keys } from "@/lib/events";
 import { useApp } from "@/lib/app";
 import { bytes, duration, shortTime } from "@/lib/format";
-import { Button, Card, Center, EmptyState, IconButton, SearchInput, Spinner, WorkspaceHeading } from "@/components/ui";
+import { Badge, Button, Card, Center, EmptyState, IconButton, SearchInput, Spinner, WorkspaceHeading, menuItem, menuSeparator, menuSurface } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 /** "Weekly sync.m4a": the memo's title, minus characters Windows doesn't allow in names. */
 function fileName(title: string): string {
@@ -64,12 +65,12 @@ export default function VoicePage() {
   const active = player?.id ? player : null;
   return (
     <div className="flex h-full flex-col">
-      <WorkspaceHeading title="Voice Memos" detail={memos.data && `${memos.data.length} ${memos.data.length === 1 ? "recording" : "recordings"}`}>
-        <Button variant="outline" icon={RotateCw} onClick={() => void memos.refetch()}>Refresh</Button>
+      <WorkspaceHeading title="Voice Memos" detail={memos.data ? `${memos.data.length} ${memos.data.length === 1 ? "recording" : "recordings"}` : connected ? undefined : "Pair with your Mac to play your recordings."}>
+        <Button variant="secondary" icon={RotateCw} onClick={() => void memos.refetch()}>Refresh</Button>
       </WorkspaceHeading>
       <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
         <Card className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="mb-2 flex flex-col gap-3 border-b border-border p-4">
+          <div className="border-b border-hairline p-3">
             <SearchInput value={filter} onChange={setFilter} placeholder="Search recordings" />
           </div>
           {memos.isLoading ? (
@@ -85,8 +86,8 @@ export default function VoicePage() {
         {active ? (
           <PlayerCard state={active} memo={memos.data?.find((m) => m.id === active.id)} refresh={refresh} />
         ) : (
-          <Card tone="workbench" className="hidden w-[37%] min-w-0 overflow-hidden lg:block">
-            <EmptyState icon={AudioLines} title="Playback" hint="Choose a recording to listen." />
+          <Card tone="window" className="hidden w-[40%] min-w-0 overflow-hidden lg:block">
+            <EmptyState icon={AudioLines} title="Nothing playing" hint="Choose a recording to listen." />
           </Card>
         )}
       </div>
@@ -96,9 +97,9 @@ export default function VoicePage() {
 
 function MemoList({ memos, activeId, playing, loadingId, onPlay }: { memos: VoiceMemo[]; activeId: string | null; playing: boolean; loadingId: string | null; onPlay: (m: VoiceMemo) => void }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const virtual = useVirtualizer({ count: memos.length, getScrollElement: () => scroller.current, estimateSize: () => 60, overscan: 8 });
+  const virtual = useVirtualizer({ count: memos.length, getScrollElement: () => scroller.current, estimateSize: () => 64, overscan: 8 });
   return (
-    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
       <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
         {virtual.getVirtualItems().map((row) => {
           const m = memos[row.index];
@@ -109,16 +110,16 @@ function MemoList({ memos, activeId, playing, loadingId, onPlay }: { memos: Voic
               <button
                 onClick={() => onPlay(m)}
                 aria-current={active || undefined}
-                className="list-row flex h-14 w-full items-center gap-3 rounded-control px-3 text-left transition-colors duration-150 hover:bg-hover"
+                className="list-row flex h-16 w-full items-center gap-3 border-b border-hairline px-4 text-left transition-colors duration-150 hover:bg-hover"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-strong text-fg">
+                <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full border", active ? "border-primary bg-primary text-on-primary" : "border-hairline-strong text-ink")}>
                   {loadingId === m.id ? <Spinner /> : active && playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-fg">{m.title || "New Recording"}</span>
-                  <span className="block text-xs text-subtle">{shortTime(m.created)} · {bytes(m.bytes)}</span>
+                  <span className="block truncate text-sm font-medium text-ink">{m.title || "New Recording"}</span>
+                  <span className="block text-[13px] text-muted-soft">{shortTime(m.created)} · {bytes(m.bytes)}</span>
                 </span>
-                <span className="shrink-0 font-mono text-xs text-muted">{duration(m.duration_secs)}</span>
+                <span className="shrink-0 font-mono text-xs text-muted tabular-nums">{duration(m.duration_secs)}</span>
               </button>
               </MemoMenu>
             </div>
@@ -132,16 +133,16 @@ function MemoList({ memos, activeId, playing, loadingId, onPlay }: { memos: Voic
 /** Right-click menu for a recording: play/pause and Save Recording As…. */
 function MemoMenu({ memo, playing, onPlay, children }: { memo: VoiceMemo; playing: boolean; onPlay: () => void; children: ReactNode }) {
   const { toast } = useApp();
-  const item = "flex h-8 cursor-default items-center gap-2 rounded-control px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover [&_svg]:size-4 [&_svg]:text-muted";
+  const item = menuItem;
   return (
     <CM.Root>
       <CM.Trigger asChild>{children}</CM.Trigger>
       <CM.Portal>
-        <CM.Content className="z-50 min-w-52 rounded-card border border-border-strong bg-raised p-1.5 animate-pop">
+        <CM.Content className={cn(menuSurface, "min-w-52")}>
           <CM.Item className={item} onSelect={onPlay}>
             {playing ? <Pause /> : <Play />} {playing ? "Pause" : "Play"}
           </CM.Item>
-          <CM.Separator className="my-1 h-px bg-border" />
+          <CM.Separator className={menuSeparator} />
           <CM.Item className={item} onSelect={() => void saveAs("VoiceMemo", memo.id, fileName(memo.title), toast)}>
             <Download /> Save Recording As…
           </CM.Item>
@@ -166,14 +167,15 @@ function PlayerCard({ state, memo, refresh }: { state: AudioState; memo?: VoiceM
   };
 
   return (
-    <Card tone="workbench" className="shrink-0 overflow-y-auto p-4 animate-enter lg:flex lg:w-[37%] lg:flex-col lg:justify-center lg:p-8">
-      <AudioLines aria-hidden className="mb-5 hidden size-8 text-accent lg:block" />
-      <h2 className="truncate font-display text-[28px] font-medium leading-tight text-fg lg:text-4xl" title={state.title || "Recording"}>{state.title || "Recording"}</h2>
-      <div className="mt-3 flex min-w-0 items-center gap-3 lg:mt-6">
-        <span className="w-11 shrink-0 font-mono text-[11px] text-subtle">{duration(position)}</span>
+    <Card tone="window" className="shrink-0 overflow-y-auto p-5 animate-enter lg:flex lg:w-[40%] lg:flex-col lg:justify-end lg:p-8">
+      <Badge dot={playing ? "var(--color-success)" : "var(--color-muted-soft)"} className="mb-4 hidden lg:inline-flex lg:self-start">{state.ended ? "Finished" : playing ? "Playing" : "Paused"}</Badge>
+      <h2 className="display-panel line-clamp-2 break-words text-[2rem] lg:text-[clamp(2.25rem,4vw,3.5rem)]" title={state.title || "Recording"}>{state.title || "Recording"}</h2>
+      {memo && <p className="mt-2 text-sm text-muted-soft lg:mt-3">{shortTime(memo.created)} · {bytes(memo.bytes)}</p>}
+      <div className="mt-4 flex min-w-0 items-center gap-3 lg:mt-8">
+        <span className="w-11 shrink-0 font-mono text-xs text-muted tabular-nums">{duration(position)}</span>
         <div className="relative flex h-6 min-w-0 flex-1 items-center">
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 h-1 overflow-hidden rounded-full bg-control-border">
-            <div className="h-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 h-0.5 overflow-hidden rounded-full bg-hairline-strong">
+            <div className="h-full bg-ink" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
           </div>
           <input
             type="range"
@@ -187,15 +189,15 @@ function PlayerCard({ state, memo, refresh }: { state: AudioState; memo?: VoiceM
               if (scrub !== null) void native.audioSeek(scrub).then(() => setTimeout(() => setScrub(null), 200));
             }}
             onKeyUp={() => scrub !== null && void native.audioSeek(scrub).then(() => setScrub(null))}
-            className="relative h-6 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
+            className="relative h-6 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-ink [&::-webkit-slider-thumb]:shadow-[0_0_0_4px_var(--color-deep)]"
           />
         </div>
-        <span className="w-11 shrink-0 text-right font-mono text-[11px] text-subtle">{duration(total)}</span>
+        <span className="w-11 shrink-0 text-right font-mono text-xs text-muted tabular-nums">{duration(total)}</span>
       </div>
-      <div className="mt-2 flex items-center gap-2 lg:mt-5">
-        <Button variant="primary" size="icon" className="size-10" icon={playing ? Pause : Play} aria-label={playing ? "Pause" : "Play"} onClick={() => void native.audioToggle().then(refresh)} />
-        <IconButton icon={Download} label="Save As…" busy={saving} onClick={save} />
-        <IconButton icon={Square} label="Stop" onClick={() => void native.audioStop().then(refresh)} />
+      <div className="mt-3 flex items-center gap-2 lg:mt-6">
+        <Button variant="primary" size="icon" className="size-11 rounded-full" icon={playing ? Pause : Play} aria-label={playing ? "Pause" : "Play"} onClick={() => void native.audioToggle().then(refresh)} />
+        <IconButton icon={Square} label="Stop" variant="secondary" onClick={() => void native.audioStop().then(refresh)} />
+        <Button variant="outline" icon={Download} busy={saving} onClick={save} className="ml-auto">Save As…</Button>
       </div>
     </Card>
   );

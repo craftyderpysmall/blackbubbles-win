@@ -9,7 +9,7 @@ import { NARROW_BELOW, useApp, useReturnFocus, useWidth } from "@/lib/app";
 import { bytes, dayLabel, groupEventText, sameDay, shortTime, time } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useNames, type NameOf } from "@/lib/contacts";
-import { Avatar, Badge, Button, Card, Center, EmptyState, IconButton, PaneHeader, SearchInput, Spinner, Textarea, WorkspaceHeading } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Center, EmptyState, IconButton, PaneHeader, SearchInput, Spinner, Textarea, WorkspaceHeading, menuItem, menuSurface } from "@/components/ui";
 import { Linkified } from "@/components/Linkified";
 import { Lightbox } from "@/components/Lightbox";
 
@@ -58,13 +58,13 @@ export function MessagesPage() {
   const list = <ChatList chats={chats.data} seen={seen} loading={chats.isLoading} error={chats.error} selected={selected} onSelect={(guid) => { paneFocus.remember(); setSelected(guid); }} />;
   return (
     <div ref={ref} className="flex h-full flex-col">
-      <WorkspaceHeading title="Messages" />
+      <WorkspaceHeading title="Messages" detail={chats.data ? unreadLabel(chats.data, seen) : connected ? undefined : "Pair with your Mac to see your conversations."} />
       <div className="flex min-h-0 flex-1 gap-4 sm:gap-6">
         <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow && chat && "hidden")} style={narrow ? { flex: 1 } : { width: listWidth }}>
           {list}
         </Card>
         {(!narrow || chat) && (
-          <Card tone="workbench" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Card tone="window" className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {chat ? (
               <Thread key={chat.guid} chat={chat} onBack={narrow ? () => { setSelected(null); paneFocus.restore(); } : undefined} />
             ) : (
@@ -120,14 +120,10 @@ function ChatList({ chats, seen, loading, error, selected, onSelect }: { chats?:
 
   return (
     <>
-      <div className="mb-2 flex flex-col gap-4 border-b border-border p-4">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-medium text-fg">Conversations</h2>
-          {chats && <span className="text-xs text-subtle">{unreadLabel(chats, seen)}</span>}
-        </div>
+      <div className="border-b border-hairline p-3">
         <SearchInput value={filter} onChange={setFilter} placeholder="Search messages" />
       </div>
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
           <Center><Spinner /></Center>
         ) : error ? (
@@ -153,7 +149,8 @@ function ChatList({ chats, seen, loading, error, selected, onSelect }: { chats?:
 
 function unreadLabel(chats: Chat[], seen: Record<string, number>) {
   const n = chats.filter((c) => isUnread(c, seen)).length;
-  return n ? `${n} unread` : `${chats.length} chats`;
+  const total = `${chats.length} ${chats.length === 1 ? "conversation" : "conversations"}`;
+  return n ? `${n} unread · ${total}` : total;
 }
 
 const ChatRow = memo(function ChatRow({ chat, name, unread, active, onSelect }: { chat: Chat; name: NameOf; unread: boolean; active: boolean; onSelect: (g: string) => void }) {
@@ -165,18 +162,18 @@ const ChatRow = memo(function ChatRow({ chat, name, unread, active, onSelect }: 
       onClick={() => onSelect(chat.guid)}
       data-pane-item={chat.guid}
       aria-current={active || undefined}
-      className="list-row flex h-[60px] w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150 hover:bg-hover"
+      className="list-row flex h-16 w-full items-center gap-3 border-b border-hairline px-4 text-left transition-colors duration-150 hover:bg-hover"
     >
       <Avatar name={chatTitle(chat, name)} size={38} />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
-          <span className={cn("min-w-0 flex-1 truncate text-[13px] text-fg", unread ? "font-semibold" : "font-medium")}>{chatTitle(chat, name)}</span>
-          {last && <span className={cn("shrink-0 text-[11px]", unread ? "font-medium text-fg" : "text-subtle")}>{shortTime(last.date)}</span>}
+          <span className={cn("min-w-0 flex-1 truncate text-sm text-ink", unread ? "font-semibold" : "font-medium")}>{chatTitle(chat, name)}</span>
+          {last && <span className={cn("shrink-0 text-xs tabular-nums", unread ? "font-medium text-ink" : "text-muted-soft")}>{shortTime(last.date)}</span>}
         </span>
         <span className="flex items-center gap-1.5">
-          {isSms(chat) && <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] leading-4 text-subtle">SMS</span>}
-          <span className={cn("min-w-0 flex-1 truncate text-xs", unread ? "text-fg" : "text-muted")}>{last?.is_from_me && !event ? `You: ${preview}` : preview}</span>
-          {unread && <span aria-label="Unread" className="size-2 shrink-0 rounded-full bg-fg" />}
+          {isSms(chat) && <span className="shrink-0 rounded-full border border-hairline-strong px-1.5 text-[10px] leading-4 text-muted">SMS</span>}
+          <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "text-body" : "text-muted-soft")}>{last?.is_from_me && !event ? `You: ${preview}` : preview}</span>
+          {unread && <span aria-label="Unread" className="size-2 shrink-0 rounded-full bg-primary" />}
         </span>
       </span>
     </button>
@@ -362,10 +359,10 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
             </Badge>
           )}
         </div>
-        <IconButton icon={muted ? BellOff : Bell} label={muted ? "Unmute notifications" : "Mute notifications"} onClick={toggleMute} className={muted ? "text-accent" : undefined} />
+        <IconButton icon={muted ? BellOff : Bell} label={muted ? "Unmute notifications" : "Mute notifications"} onClick={toggleMute} className={muted ? "text-ink" : undefined} />
       </PaneHeader>
 
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4">
+      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6">
         {thread.isLoading ? (
           <Center><Spinner /></Center>
         ) : thread.error ? (
@@ -380,7 +377,7 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
                   Load earlier
                 </Button>
               ) : (
-                <span className="text-[11px] text-subtle">Beginning of conversation</span>
+                <span className="text-xs text-muted-soft">Beginning of conversation</span>
               )}
             </div>
             <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
@@ -389,9 +386,9 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
                 return (
                   <div key={item.key} data-index={item.index} ref={virtual.measureElement} style={{ position: "absolute", top: 0, left: 0, right: 0, transform: `translateY(${item.start}px)` }}>
                     {row.kind === "day" ? (
-                      <div className="py-3 text-center text-[11px] font-medium text-subtle">{row.label}</div>
+                      <div className="flex items-center gap-3 py-4 text-xs text-muted-soft before:h-px before:flex-1 before:bg-hairline after:h-px after:flex-1 after:bg-hairline">{row.label}</div>
                     ) : row.kind === "event" ? (
-                      <div title={time(row.date)} className="selectable px-6 py-2 text-center text-[11.5px] text-subtle">{row.text}</div>
+                      <div title={time(row.date)} className="selectable px-6 py-2 text-center text-xs text-muted-soft">{row.text}</div>
                     ) : (
                       <Bubble m={row.m} sms={isSms(chat)} sender={row.sender && name(row.sender)} tail={row.tail} onView={setViewing} />
                     )}
@@ -405,13 +402,13 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
       </div>
 
       {staged.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto border-t border-border px-3 pt-3">
+        <div className="flex gap-2 overflow-x-auto border-t border-hairline px-4 pt-3">
           {staged.map((file, i) => (
             <StagedFile key={`${i}-${file.name}`} file={file} onRemove={() => setStaged((s) => s.filter((_, j) => j !== i))} />
           ))}
         </div>
       )}
-      <div className={cn("flex items-end gap-2 p-3", !staged.length && "border-t border-border")}>
+      <div className={cn("flex items-end gap-2 px-4 py-3", !staged.length && "border-t border-hairline")}>
         <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && (sendFiles(e.target.files), (e.target.value = ""))} />
         <IconButton icon={Paperclip} label="Attach files" onClick={() => fileInput.current?.click()} />
         <AutoTextarea value={draft} onChange={setDraft} onSubmit={send} onPaste={onPaste} placeholder={chat.service === "IMessage" ? "iMessage" : "Text message"} />
@@ -419,8 +416,8 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
       </div>
 
       {dragging && (
-        <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-card border border-dashed border-border-strong bg-bg/80 animate-fade">
-          <div className="flex flex-col items-center gap-2 text-fg">
+        <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-card border border-dashed border-control bg-canvas/85 animate-fade">
+          <div className="flex flex-col items-center gap-2 text-ink">
             <Upload className="size-6" />
             <span className="text-sm font-medium">Drop to send to {title}</span>
           </div>
@@ -440,9 +437,9 @@ function StagedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
   return (
     <div className="group relative shrink-0 animate-enter">
       {url ? (
-        <img src={url} alt={file.name} className="size-16 rounded-control border border-border object-cover" />
+        <img src={url} alt={file.name} className="size-16 rounded-control border border-hairline object-cover" />
       ) : (
-        <div className="flex h-16 max-w-48 items-center gap-2 rounded-control border border-border bg-raised px-3 text-xs text-muted">
+        <div className="flex h-16 max-w-48 items-center gap-2 rounded-control border border-hairline bg-elevated px-3 text-xs text-muted">
           <FileIcon className="size-4 shrink-0" />
           <span className="truncate">{file.name}</span>
         </div>
@@ -450,7 +447,7 @@ function StagedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
       <button
         aria-label={`Remove ${file.name}`}
         onClick={onRemove}
-        className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-border-strong bg-surface text-fg transition-colors hover:bg-hover"
+        className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-hairline-strong bg-card text-ink transition-colors hover:bg-hover"
       >
         <X className="size-3" />
       </button>
@@ -481,28 +478,29 @@ function AutoTextarea({ value, onChange, onSubmit, onPaste, placeholder }: { val
           onSubmit();
         }
       }}
-      className="max-h-40 min-h-9 flex-1 rounded-card py-[7px] leading-5"
+      className="max-h-40 min-h-9 flex-1 py-[7px] text-[15px] leading-5"
     />
   );
 }
 
 const Bubble = memo(function Bubble({ m, sms, sender, tail, onView }: { m: LocalMessage; sms: boolean; sender: string | null; tail: boolean; onView: (a: Attachment) => void }) {
   const mine = m.is_from_me;
-  const style = mine ? (sms ? "border border-border-strong text-fg" : "bg-selected text-fg border border-border-strong") : "bg-surface text-fg";
+  // Sent bubbles carry a faint wash of the service's colour; received ones are cards.
+  const style = mine ? (sms ? "border border-success/25 bg-success/8 text-ink" : "border border-primary/30 bg-primary/14 text-ink") : "border border-hairline-strong bg-card text-ink";
   const text = m.text?.replace(/￼/g, "").trim();
   return (
     <div className={cn("flex flex-col", mine ? "items-end" : "items-start", tail ? "pb-2" : "pb-0.5")}>
-      {sender && <span className="mb-0.5 px-3 text-[11px] text-subtle">{sender}</span>}
+      {sender && <span className="mb-1 px-3 text-xs text-muted-soft">{sender}</span>}
       {m.attachments.map((a) => (
         <AttachmentView key={a.guid} a={a} mine={mine} onView={onView} />
       ))}
       {text && (
-        <div title={time(m.date)} className={cn("selectable max-w-[min(78%,560px)] rounded-card px-4 py-2.5 text-base leading-relaxed whitespace-pre-wrap break-words", style, m.failed && "opacity-60")}>
+        <div title={time(m.date)} className={cn("selectable max-w-[min(78%,560px)] rounded-card px-4 py-2.5 text-[15px] leading-normal tracking-[-0.005em] whitespace-pre-wrap break-words", style, m.failed && "opacity-60")}>
           <Linkified text={text} />
         </div>
       )}
       {tail && (
-        <span className={cn("mt-0.5 px-2 text-[10.5px]", m.failed ? "text-danger" : "text-subtle")}>
+        <span className={cn("mt-1 px-2 text-[11px] tabular-nums", m.failed ? "text-danger" : "text-muted-soft")}>
           {m.failed ? "Not delivered" : m.guid.startsWith("local-") ? "Sending…" : time(m.date)}
         </span>
       )}
@@ -514,12 +512,12 @@ const Bubble = memo(function Bubble({ m, sms, sender, tail, onView }: { m: Local
  *  As…" can't save images served by the app. */
 function AttachmentMenu({ a, onOpen, children }: { a: Attachment; onOpen?: () => void; children: React.ReactNode }) {
   const { toast } = useApp();
-  const item = "flex h-8 cursor-default items-center gap-2 rounded-control px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover [&_svg]:size-4 [&_svg]:text-muted";
+  const item = menuItem;
   return (
     <CM.Root>
       <CM.Trigger asChild>{children}</CM.Trigger>
       <CM.Portal>
-        <CM.Content className="z-50 min-w-44 rounded-card border border-border-strong bg-raised p-1.5 animate-pop">
+        <CM.Content className={menuSurface}>
           {onOpen && (
             <CM.Item className={item} onSelect={onOpen}>
               <Maximize2 /> Open
@@ -542,7 +540,7 @@ function AttachmentView({ a, mine, onView }: { a: Attachment; mine: boolean; onV
   if (image) {
     return (
       <AttachmentMenu a={a} onOpen={() => onView(a)}>
-        <button onClick={() => onView(a)} className="mb-0.5 overflow-hidden rounded-card border border-border bg-raised">
+        <button onClick={() => onView(a)} className="mb-0.5 overflow-hidden rounded-card border border-hairline bg-elevated">
           <img src={blobUrl("Attachment", a.guid)} alt={a.file_name ?? ""} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} className="block max-h-72 max-w-[min(280px,60vw)] min-h-16 min-w-16 object-cover" />
         </button>
       </AttachmentMenu>
@@ -550,13 +548,13 @@ function AttachmentView({ a, mine, onView }: { a: Attachment; mine: boolean; onV
   }
   return (
     <AttachmentMenu a={a}>
-    <button onClick={save} title="Save As…" className={cn("mb-0.5 flex max-w-72 items-center gap-3 rounded-card border px-3 py-2 text-left", mine ? "border-border-strong" : "border-border bg-raised")}>
+    <button onClick={save} title="Save As…" className={cn("mb-0.5 flex max-w-72 items-center gap-3 rounded-card border px-3 py-2 text-left", mine ? "border-hairline-strong" : "border-hairline bg-elevated")}>
       <FileIcon className="size-5 shrink-0 text-muted" />
       <span className="min-w-0">
-        <span className="block truncate text-[13px] text-fg">{a.file_name ?? "Attachment"}</span>
-        <span className="block text-[11px] text-subtle">{bytes(a.total_bytes)}</span>
+        <span className="block truncate text-[13px] text-ink">{a.file_name ?? "Attachment"}</span>
+        <span className="block text-[11px] text-muted-soft">{bytes(a.total_bytes)}</span>
       </span>
-      <Download className="size-4 shrink-0 text-subtle" />
+      <Download className="size-4 shrink-0 text-muted-soft" />
     </button>
     </AttachmentMenu>
   );

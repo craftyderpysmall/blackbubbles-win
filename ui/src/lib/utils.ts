@@ -5,15 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Calendars carry their own colours; map them onto the desaturated semantic palette by
+/** Calendars carry their own colours; map them onto DESIGN.md's accent palette by
  *  nearest hue, so the UI stays monochrome-first. */
 const SEMANTIC: [number, string][] = [
-  [215, "var(--color-accent)"],
-  [134, "var(--color-success)"],
-  [43, "var(--color-warning)"],
-  [359, "var(--color-danger)"],
-  [260, "#c5a4cb"],
-  [186, "#91c2d5"],
+  [15, "var(--color-primary)"],
+  [35, "var(--color-amber)"],
+  [50, "var(--color-warning)"],
+  [135, "var(--color-success)"],
+  [170, "var(--color-teal)"],
+  [355, "var(--color-danger)"],
 ];
 
 export function accent(rgb: number): string {

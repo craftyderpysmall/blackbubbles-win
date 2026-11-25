@@ -46,11 +46,11 @@ export function Lightbox({
             if (event.key === "ArrowLeft") onPrev?.();
             else if (event.key === "ArrowRight") onNext?.();
           }}
-          className="fixed inset-0 z-40 flex flex-col bg-deep outline-none animate-fade"
+          className="fixed inset-0 z-40 flex flex-col bg-canvas outline-none animate-fade"
         >
-          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-2 sm:px-5">
-            <Theater.Title className="min-w-0 flex-1 truncate text-[13px] text-body">{caption || name}</Theater.Title>
-            <Button variant="outline" icon={Download} busy={saving} onClick={save}>Save As…</Button>
+          <div className="flex h-16 shrink-0 items-center gap-2 border-b border-hairline bg-canvas px-4 sm:px-6">
+            <Theater.Title className="min-w-0 flex-1 truncate text-sm text-body">{caption || name}</Theater.Title>
+            <Button variant="primary" icon={Download} busy={saving} onClick={save}>Save As…</Button>
             <Theater.Close asChild>
               <IconButton icon={X} label="Close" />
             </Theater.Close>
@@ -64,7 +64,7 @@ export function Lightbox({
               alt={name}
               onLoad={() => setLoaded(true)}
               onClick={(event) => event.stopPropagation()}
-              className="relative max-h-full max-w-full rounded-control object-contain transition-opacity duration-150"
+              className="relative max-h-full max-w-full rounded-card object-contain transition-opacity duration-150"
               style={{ opacity: loaded ? 1 : 0 }}
             />
             {onPrev && (

@@ -1,55 +1,67 @@
 @import "tailwindcss";
-/* Fonts (Inter, JetBrains Mono, bundled colour emoji) and MapLibre's CSS are imported
-   from main.tsx so Vite can drop the unused .woff fallbacks. */
+/* Fonts (Cormorant Garamond, Inter, JetBrains Mono, bundled colour emoji) and MapLibre's
+   CSS are imported from main.tsx so Vite can drop the unused .woff fallbacks. */
 
-/* BlackBubbles surface and interaction tokens. See DESIGN.md. */
+/* Tokens from DESIGN.md (Claude), dark mode: neutral near-black surfaces, white and grey
+   text, and coral as the one brand accent. */
 @theme {
-  --color-bg: #000000;
-  --color-nav: #08090b;
-  --color-surface: #0e0f13;
-  --color-raised: #14161c;
-  --color-deep: #060709;
-  --color-hover: #1a1c25;
-  --color-selected: #212236;
-  --color-border: #242630;
-  --color-border-strong: #3c4050;
-  --color-control-border: #666b80;
-  --color-fg: #f5f5fa;
-  --color-body: #d1d3df;
-  --color-muted: #a8acbd;
-  --color-subtle: #9498ab;
-  --color-primary: #f1f2fa;
-  --color-primary-hover: #e2e4f8;
-  --color-pressed: #cbd0ee;
-  --color-primary-fg: #0b0c11;
-  --color-disabled: #1a1c25;
-  --color-disabled-fg: #7e8294;
-  --color-accent: #b7b9f2;
-  --color-accent-strong: #d3d4ff;
-  --color-selection: #c9cbf8;
-  --color-selection-fg: #101118;
-  --color-success: #87c6ae;
-  --color-warning: #e2bf85;
-  --color-danger: #ee9da8;
-  --color-danger-surface: #2c1920;
-  --color-scrim: rgb(0 0 0 / 0.68);
+  --color-*: initial;
+  --color-transparent: transparent;
+
+  /* Neutral dark mode, matched to getdesign.md's dark preview of this system: a cool
+     near-black floor (#0c0c0e), #2a2a2b hairlines, white and grey text. Coral and the
+     status colours come from DESIGN.md unchanged. */
+  --color-canvas: #0c0c0e;
+  --color-deep: #101012;
+  --color-card: #141416;
+  --color-elevated: #1c1c1f;
+  --color-hover: #1c1c1f;
+  --color-hairline: #2a2a2b;
+  --color-hairline-strong: #3a3a3c;
+  --color-divider: #1f1f21;
+  /* Inputs and outlined controls need a boundary people can find (3:1 on the canvas). */
+  --color-control: #66666a;
+
+  /* Text */
+  --color-ink: #ffffff;
+  --color-body: #dbdbdb;
+  --color-muted: #a7a7a8;
+  --color-muted-soft: #8c8c8e;
+  --color-disabled: #5e5e62;
+
+  /* Brand: coral, scarce on single controls; it only darkens on press. */
+  --color-primary: #cc785c;
+  --color-primary-active: #a9583e;
+  --color-on-primary: #ffffff;
+  --color-link: #cc785c;
+
+  /* Companions and status. */
+  --color-teal: #5db8a6;
+  --color-amber: #e8a55a;
+  --color-success: #5db872;
+  --color-warning: #d4a017;
+  --color-danger: #c64545;
+  --color-scrim: rgb(12 12 14 / 0.72);
 
   /* Segoe UI Emoji is Windows' complete colour emoji font (shapes FE0F and ZWJ sequences).
      The bundled Noto subsets only fill in emoji newer than the installed Segoe. */
   --font-sans: "Inter Variable", "Inter", "Segoe UI Emoji", "BlackBubbles Emoji", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "JetBrainsMono Nerd Font", "JetBrains Mono", "Cascadia Mono", ui-monospace, "Segoe UI Emoji", "BlackBubbles Emoji", monospace;
-  --font-display: "Cormorant Garamond Variable", "Cormorant Garamond", "Georgia", "Times New Roman", serif;
+  /* Cormorant Garamond stands in for Copernicus / Tiempos Headline. */
+  --font-display: "Cormorant Garamond Variable", "Cormorant Garamond", "Georgia", "Times New Roman", "Segoe UI Emoji", serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, "Segoe UI Emoji", "BlackBubbles Emoji", monospace;
 
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-control: 8px;
   --radius-card: 12px;
   --radius-feature: 16px;
-  --radius-control: 8px;
 
   --ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
   --animate-enter: enter 200ms var(--ease-decel) both;
-  --animate-pop: pop 200ms var(--ease-decel) both;
+  --animate-pop: pop 180ms var(--ease-decel) both;
   --animate-fade: fade 180ms var(--ease-decel) both;
   --animate-toast: toast 200ms var(--ease-decel) both;
 
@@ -75,11 +87,11 @@
   }
   html {
     color-scheme: dark;
-    background: var(--color-bg);
+    background: var(--color-canvas);
   }
   body {
     margin: 0;
-    background: var(--color-bg);
+    background: var(--color-canvas);
     color: var(--color-body);
     font-family: var(--font-sans);
     font-size: 14px;
@@ -99,27 +111,26 @@
     cursor: auto;
   }
   ::selection {
-    background: var(--color-selection);
-    color: var(--color-selection-fg);
+    background: rgb(204 120 92 / 0.38); /* primary */
+    color: var(--color-ink);
   }
   button {
     cursor: default;
   }
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-  /* Thin, monochrome scrollbars (border-strong thumb). */
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
+    scrollbar-color: var(--color-hairline-strong) transparent;
   }
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--color-border-strong);
+    background: var(--color-hairline-strong);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
@@ -129,36 +140,87 @@
   }
 }
 
-@utility page-title {
-  color: var(--color-fg);
-  font: 500 1.75rem / 1.2 var(--font-display);
-  letter-spacing: -0.3px;
+/* display-xl: the workspace headline. Serif at 500, never bold, always tight tracking. */
+@utility display-hero {
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2.5rem, min(5.6vw, 9.5vh), 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
 }
 
-@utility workspace-title {
-  color: var(--color-fg);
-  font: 500 clamp(2.25rem, 4.3vw, 3rem) / 1.1 var(--font-display);
-  letter-spacing: -1px;
+/* display-md: feature panel headings (the playing recording, the locked note). */
+@utility display-panel {
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 
-@utility workbench {
+/* title-lg */
+@utility heading-md {
+  color: var(--color-ink);
+  font: 500 1.375rem / 1.3 var(--font-sans);
+}
+
+/* title-md */
+@utility heading-sm {
+  color: var(--color-ink);
+  font: 500 1.125rem / 1.4 var(--font-sans);
+}
+
+/* The hero sub-line under a workspace headline. */
+@utility subtitle {
+  font: 400 1.125rem / 1.4 var(--font-sans);
+}
+
+/* nav-link / category-tab label. */
+@utility nav-label {
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+/* feature-card, dark mode: one step above the canvas with a soft hairline. */
+@utility surface-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
+}
+
+/* code-window-card / product-mockup-card-dark: the workspace's focal pane. */
+@utility surface-window {
   background-color: var(--color-deep);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-feature);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
 }
 
+/* Index rows are separated by hairlines; the active row lifts a step and carries a coral
+   leading edge. */
 @utility list-row {
-  border: 1px solid transparent;
+  position: relative;
   &[aria-current="true"] {
-    background-color: var(--color-selected);
-    border-color: var(--color-border);
-    border-inline-start-color: var(--color-accent);
+    background-color: var(--color-elevated);
+    color: var(--color-ink);
+  }
+  &[aria-current="true"]::before {
+    content: "";
+    position: absolute;
+    inset-block: 10px;
+    inset-inline-start: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--color-primary);
   }
 }
 
-@media (max-height: 550px) {
+@media (max-height: 620px) {
   .workspace-view { top: 12px; bottom: 12px; }
-  .workspace-heading { padding-bottom: 12px; }
+  .workspace-heading { padding-top: 0; padding-bottom: 12px; }
+  .workspace-heading .display-hero { font-size: 2.25rem; }
+  .workspace-heading .subtitle { font-size: 0.9375rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -180,7 +242,7 @@
   transform: scale(1.06);
 }
 .maplibregl-ctrl-attrib {
-  background: var(--color-raised) !important;
+  background: var(--color-elevated) !important;
   color: var(--color-muted) !important;
   font-size: 10px;
 }

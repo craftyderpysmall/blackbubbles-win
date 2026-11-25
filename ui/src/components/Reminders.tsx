@@ -92,7 +92,7 @@ export function ReminderCheck({ done, onClick }: { done: boolean; onClick: () =>
       aria-label={done ? "Mark as not done" : "Mark as done"}
       className={cn(
         "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors duration-200",
-        done ? "border-accent bg-selected text-accent" : "border-control-border hover:border-accent",
+        done ? "border-primary bg-primary text-on-primary" : "border-control hover:border-ink",
       )}
     >
       {done && <Check className="size-3 animate-pop" strokeWidth={3} />}
@@ -107,19 +107,19 @@ export function ReminderRow({ r, lists, showList = true }: { r: Reminder; lists?
   const due = dueLabel(r);
   const overdue = isOverdue(r);
   return (
-    <div className="group flex items-start gap-3 rounded-control px-2.5 py-2 hover:bg-hover" onMouseLeave={() => setConfirm(false)}>
+    <div className="group flex items-start gap-3 border-b border-hairline px-4 py-3 last:border-b-0 hover:bg-hover" onMouseLeave={() => setConfirm(false)}>
       <ReminderCheck done={r.completed} onClick={() => void toggle(r)} />
       <div className={cn("selectable min-w-0 flex-1 transition-opacity duration-300", r.completed && "opacity-50")}>
-        <div className={cn("text-[13px] text-fg", r.completed && "line-through decoration-subtle")}>
+        <div className={cn("text-sm text-ink", r.completed && "line-through decoration-muted-soft")}>
           {priorityMark(r.priority) && <span className="mr-1 font-semibold text-muted">{priorityMark(r.priority)}</span>}
           {r.title || "New Reminder"}
         </div>
-        {r.notes && <div className="line-clamp-2 text-xs text-subtle">{r.notes}</div>}
+        {r.notes && <div className="mt-0.5 line-clamp-2 text-[13px] text-muted-soft">{r.notes}</div>}
         {(due || (showList && list)) && (
-          <div className="mt-0.5 flex items-center gap-2 text-xs">
+          <div className="mt-1 flex items-center gap-2 text-xs">
             {due && <span className={overdue ? "text-danger" : "text-muted"}>{due}</span>}
             {showList && list && (
-              <span className="flex items-center gap-1.5 text-subtle">
+              <span className="flex items-center gap-1.5 text-muted-soft">
                 <span className="size-1.5 rounded-full" style={{ background: listColor(lists, r.list_id) }} />
                 {list.title}
               </span>

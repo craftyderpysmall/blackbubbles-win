@@ -73,10 +73,7 @@ export default function RemindersPage() {
 
   const sidebar = (
     <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow && picked && "hidden")} style={narrow ? { flex: 1 } : { width: Math.min(320, Math.max(260, width * 0.3)) }}>
-      <div className="mb-3 border-b border-border p-4">
-        <h2 className="text-lg font-medium text-fg">Lists</h2>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="grid grid-cols-2 gap-2">
           {SMART.map(([id, Icon, name]) => {
             const active = "smart" in view && view.smart === id;
@@ -88,20 +85,20 @@ export default function RemindersPage() {
                 aria-pressed={active}
                 onClick={() => choose({ smart: id })}
                 className={cn(
-                  "flex flex-col gap-2 rounded-control border p-3 text-left transition-colors duration-150",
-                  active ? "border-border-strong bg-selected" : "border-border bg-deep hover:bg-hover",
+                  "flex flex-col gap-3 rounded-control border p-3 text-left transition-colors duration-150",
+                  active ? "border-hairline-strong bg-elevated" : "border-hairline bg-canvas hover:bg-hover",
                 )}
               >
-                <span className="flex items-center justify-between">
-                  <Icon className={cn("size-[18px]", active ? "text-fg" : "text-muted")} />
-                  <span className="font-mono text-lg text-fg tabular-nums">{count ?? "–"}</span>
+                <span className="flex items-start justify-between">
+                  <Icon className={cn("size-4", active ? "text-ink" : "text-muted-soft")} />
+                  <span className="font-display text-[34px] leading-none text-ink tabular-nums">{count ?? "–"}</span>
                 </span>
-                <span className="text-xs font-medium text-muted">{name}</span>
+                <span className={cn("nav-label text-[13px]", active ? "text-ink" : "text-muted")}>{name}</span>
               </button>
             );
           })}
         </div>
-        <div className="mt-4 mb-1 px-1 text-[11px] font-medium tracking-wide text-subtle uppercase">My lists</div>
+        <div className="mt-5 mb-1 px-2.5 text-[13px] font-medium text-muted-soft">My lists</div>
         {lists.isLoading ? (
           <div className="py-4"><Center><Spinner /></Center></div>
         ) : (
@@ -113,13 +110,11 @@ export default function RemindersPage() {
                 data-pane-item={`list:${l.id}`}
                 aria-current={active || undefined}
                 onClick={() => choose({ list: l.id })}
-                className="list-row flex h-11 w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150 hover:bg-hover"
+                className="list-row flex h-11 w-full items-center gap-3 rounded-control px-3 text-left transition-colors duration-150 hover:bg-hover"
               >
-                <span className="flex size-7 items-center justify-center rounded-control border border-border-strong bg-deep" style={{ color: listColor(lists.data, l.id) }}>
-                  <ListChecks className="size-3.5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{l.title}</span>
-                <span className="text-xs text-subtle tabular-nums">{counts.byList(l.id)}</span>
+                <span className="size-2 shrink-0 rounded-full" style={{ background: listColor(lists.data, l.id) }} />
+                <span className="min-w-0 flex-1 truncate text-sm text-ink">{l.title}</span>
+                <span className="text-xs text-muted-soft tabular-nums">{counts.byList(l.id)}</span>
               </button>
             );
           })
@@ -130,7 +125,7 @@ export default function RemindersPage() {
 
   const groups = useMemo(() => groupFor(view, shown, lists.data), [view, shown, lists.data]);
   const main = (
-    <Card tone="workbench" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <Card tone="window" className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <PaneHeader
         title={title}
         subtitle={`${shown.filter((r) => !r.completed).length} open`}
@@ -142,7 +137,7 @@ export default function RemindersPage() {
           </div>
         )}
       </PaneHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {source.isLoading ? (
           <Center><Spinner /></Center>
         ) : source.error ? (
@@ -151,8 +146,8 @@ export default function RemindersPage() {
           <EmptyState icon={CheckCircle2} title={"smart" in view && view.smart === "completed" ? "Nothing completed yet" : "All done"} hint={connected ? undefined : "Connect to your Mac in Settings."} />
         ) : (
           groups.map(([label, items]) => (
-            <div key={label || "_"} className="mb-2">
-              {label && <div className="px-2.5 pt-2 pb-1 text-xs font-semibold text-muted">{label}</div>}
+            <div key={label || "_"}>
+              {label && <div className="border-b border-hairline px-4 pt-5 pb-2 text-[13px] font-medium text-muted-soft">{label}</div>}
               {items.map((r) => (
                 <ReminderRow key={r.id} r={r} lists={lists.data} showList={!("list" in view)} />
               ))}
@@ -168,7 +163,10 @@ export default function RemindersPage() {
 
   return (
     <div ref={ref} className="flex h-full flex-col">
-      <WorkspaceHeading title="Reminders" />
+      <WorkspaceHeading
+        title="Reminders"
+        detail={open.data ? `${counts.today} due today · ${counts.all} open` : connected ? undefined : "Pair with your Mac to see your lists."}
+      />
       <div className="flex min-h-0 flex-1 gap-4 sm:gap-6">
         {sidebar}
         {(!narrow || picked) && main}
@@ -230,7 +228,7 @@ function QuickAdd({ listId, defaultToday, lists }: { listId: string | null; defa
 
   return (
     <form
-      className="flex flex-wrap items-center gap-2 border-t border-border p-3"
+      className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-3"
       onSubmit={(e) => {
         e.preventDefault();
         void add();
@@ -238,8 +236,8 @@ function QuickAdd({ listId, defaultToday, lists }: { listId: string | null; defa
     >
       <Input placeholder="New reminder" value={title} onChange={(e) => setTitle(e.target.value)} className="min-w-40 flex-1" disabled={!connected || !writable.length} />
       {/* WebKit draws empty date/time fields as today's date: dim them until set. */}
-      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cn("w-36", !date && "text-subtle")} aria-label="Due date" title={defaultToday && !date ? "Defaults to today" : "Optional due date"} />
-      <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={cn("w-28", !time && "text-subtle")} aria-label="Due time" disabled={!date && !defaultToday} title="Optional time (alerts on your iPhone too)" />
+      <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={cn("w-36", !date && "text-muted-soft")} aria-label="Due date" title={defaultToday && !date ? "Defaults to today" : "Optional due date"} />
+      <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={cn("w-28", !time && "text-muted-soft")} aria-label="Due time" disabled={!date && !defaultToday} title="Optional time (alerts on your iPhone too)" />
       <Button type="submit" variant="primary" icon={Plus} busy={busy} disabled={!title.trim()}>Add</Button>
     </form>
   );

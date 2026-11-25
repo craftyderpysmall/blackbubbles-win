@@ -50,5 +50,5 @@ native
     );
   })
   .catch((err) => {
-    root.render(<pre style={{ color: "#e5787a", padding: 16 }}>BlackBubbles failed to start: {errorText(err)}</pre>);
+    root.render(<pre style={{ color: "#c64545", padding: 16 }}>BlackBubbles failed to start: {errorText(err)}</pre>);
   });

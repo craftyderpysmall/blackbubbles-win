@@ -8,7 +8,7 @@ import { keys } from "@/lib/events";
 import { NARROW_BELOW, useApp, useReturnFocus, useWidth } from "@/lib/app";
 import { shortTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, Center, Chip, Dialog, EmptyState, IconButton, Input, PaneHeader, SearchInput, Spinner, WorkspaceHeading } from "@/components/ui";
+import { Badge, Button, Card, Center, Chip, Dialog, EmptyState, IconButton, Input, PaneHeader, SearchInput, Spinner, WorkspaceHeading, menuItem, menuSeparator, menuSurface } from "@/components/ui";
 
 export default function NotesPage() {
   const { connected, config, tab, toast } = useApp();
@@ -192,7 +192,7 @@ export default function NotesPage() {
 
   return (
     <div ref={ref} className="flex h-full flex-col">
-      <WorkspaceHeading title="Notes" detail={notes.data && `${shown.length} ${shown.length === 1 ? "note" : "notes"}`}>
+      <WorkspaceHeading title="Notes" detail={notes.data ? `${shown.length} ${shown.length === 1 ? "note" : "notes"}${folder ? ` in ${folders.data?.find((f) => f.id === folder)?.name ?? "this folder"}` : ""}` : connected ? undefined : "Pair with your Mac to read and edit Apple Notes."}>
         {(!narrow || !open) && (
           <Button variant={dirty ? "outline" : "primary"} icon={Plus} busy={creating} disabled={!connected} onClick={create}>
             New note
@@ -201,14 +201,14 @@ export default function NotesPage() {
       </WorkspaceHeading>
       <div className="flex min-h-0 flex-1 gap-4 sm:gap-6">
         <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow && open && "hidden")} style={narrow ? { flex: 1 } : { width: listWidth }}>
-          <div className="flex flex-col gap-3 border-b border-border p-4">
+          <div className="flex flex-col gap-3 border-b border-hairline p-3">
             <SearchInput value={filter} onChange={setFilter} placeholder="Search notes" />
             <div role="group" aria-label="Note folders" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
               <Chip active={folder === null} onClick={() => setFolder(null)}>All</Chip>
               {folders.data?.map((f) => (
                 <Chip key={f.id} active={folder === f.id} onClick={() => setFolder(f.id)}>
                   <span title={f.account}>{f.name}</span>
-                  <span className="opacity-60">{f.count}</span>
+                  <span className="text-muted-soft">{f.count}</span>
                 </Chip>
               ))}
             </div>
@@ -224,7 +224,7 @@ export default function NotesPage() {
           )}
         </Card>
         {(!narrow || open) && (
-          <Card tone="workbench" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <Card tone="window" className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {!open ? (
               <EmptyState icon={NotebookPen} title="Select a note" hint="The first line becomes the title." />
             ) : note.isLoading ? (
@@ -258,6 +258,8 @@ export default function NotesPage() {
                     Save
                   </Button>
                 </PaneHeader>
+                {/* Full-width so the scrollbar sits at the pane edge; padding keeps a ~68ch
+                    reading column centred. The caret marks focus. */}
                 <textarea
                   key={open}
                   autoFocus
@@ -267,14 +269,14 @@ export default function NotesPage() {
                   autoComplete="off"
                   aria-label="Note body"
                   readOnly={saving || pending.has(open)}
-                  className="selectable mx-auto w-full max-w-[700px] min-h-0 flex-1 resize-none bg-transparent px-5 py-6 font-sans text-[17px] leading-[1.7] text-body outline-offset-[-2px] placeholder:text-subtle sm:px-8 sm:py-8"
+                  className="selectable min-h-0 w-full flex-1 resize-none bg-transparent px-[max(1.5rem,calc((100%-680px)/2))] py-8 text-[17px] leading-[1.7] text-body caret-primary placeholder:text-muted-soft focus-visible:outline-none sm:py-10"
                   placeholder="Start typing…"
                 />
               </>
             )}
             {open && dirty && (saveError || needsUnlock) && (
-              <div className="flex flex-wrap items-center gap-2 border-t border-border bg-surface px-4 py-2">
-                <p className="min-w-0 flex-1 text-xs text-danger" role="alert">{saveError || "Unlock the note again to save your draft."}</p>
+              <div className="flex flex-wrap items-center gap-2 border-t border-hairline bg-card px-4 py-2.5 sm:px-6">
+                <p className="min-w-0 flex-1 text-[13px] text-danger" role="alert">{saveError || "Unlock the note again to save your draft."}</p>
                 <Button size="sm" onClick={() => {
                   setBody(saved);
                   setSaveError(null);
@@ -319,34 +321,30 @@ function LockedNote({ id, onUnlock }: { id: string; onUnlock: (text: string) => 
   return (
     <div className="flex min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
       <form
-        className="m-auto flex w-full max-w-xs flex-col items-center gap-3 text-center animate-fade"
+        className="m-auto flex w-full max-w-sm flex-col items-center gap-3 text-center animate-fade"
         onSubmit={(e) => {
           e.preventDefault();
           void unlock();
         }}
       >
-        <div className="flex size-12 items-center justify-center rounded-card border border-border-strong bg-raised">
-          <Lock className="size-5 text-muted" />
-        </div>
-        <h3 className="page-title">This note is locked</h3>
-        <div className="text-sm text-subtle">Enter your custom Notes password to open and edit this note.</div>
+        <Lock className="mb-1 size-5 text-muted-soft" aria-hidden />
+        <h3 className="display-panel">This note is locked</h3>
+        <div className="text-sm text-muted">Enter your custom Notes password to open and edit this note.</div>
         <label htmlFor="notes-password" className="w-full text-left text-sm text-body">Notes password</label>
         <Input id="notes-password" type="password" autoComplete="off" autoFocus placeholder="Notes password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div role="alert" className="text-xs text-danger">{error}</div>}
         <Button type="submit" variant="primary" icon={LockOpen} busy={busy} disabled={!password}>Unlock</Button>
-        <div className="text-[11px] text-subtle">Notes locked with your iPhone or Mac passcode can only be opened on those devices.</div>
+        <div className="text-xs text-muted-soft">Notes locked with your iPhone or Mac passcode can only be opened on those devices.</div>
       </form>
     </div>
   );
 }
 
-const menuItem = "flex h-8 cursor-default items-center gap-2 rounded-control px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover [&_svg]:size-4 [&_svg]:text-muted";
-
 function NoteList({ notes, open, onOpen, onDelete }: { notes: NoteSummary[]; open: string | null; onOpen: (id: string) => void; onDelete: (n: NoteSummary) => void }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const virtual = useVirtualizer({ count: notes.length, getScrollElement: () => scroller.current, estimateSize: () => 66, overscan: 8 });
+  const virtual = useVirtualizer({ count: notes.length, getScrollElement: () => scroller.current, estimateSize: () => 68, overscan: 8 });
   return (
-    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
       <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
         {virtual.getVirtualItems().map((row) => {
           const n = notes[row.index];
@@ -358,27 +356,27 @@ function NoteList({ notes, open, onOpen, onDelete }: { notes: NoteSummary[]; ope
                 onClick={() => onOpen(n.id)}
                 data-pane-item={n.id}
                 aria-current={n.id === open || undefined}
-                className="list-row flex h-[62px] w-full items-center gap-3 rounded-control px-3 text-left transition-colors duration-150 hover:bg-hover data-[state=open]:bg-hover"
+                className="list-row flex h-[68px] w-full items-center gap-3 border-b border-hairline px-4 text-left transition-colors duration-150 hover:bg-hover data-[state=open]:bg-hover"
               >
-                <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-control border border-border bg-bg text-accent">
-                  {n.locked ? <Lock className="size-3.5" /> : <NotebookPen className="size-3.5" />}
-                </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{n.title || "New Note"}</span>
-                    <span className="shrink-0 text-[11px] text-subtle">{shortTime(n.modified)}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{n.title || "New Note"}</span>
+                    <span className="shrink-0 text-xs text-muted-soft tabular-nums">{shortTime(n.modified)}</span>
                   </span>
-                  <span className="block truncate text-xs text-muted">{n.locked ? "Locked" : n.snippet || "No additional text"}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-muted-soft">
+                    {n.locked && <Lock aria-label="Locked" className="size-3 shrink-0 text-muted" />}
+                    <span className="truncate">{n.locked ? "Locked" : n.snippet || "No additional text"}</span>
+                  </span>
                 </span>
               </button>
               </CM.Trigger>
               <CM.Portal>
-                <CM.Content className="z-50 min-w-40 rounded-control border border-border-strong bg-raised p-1.5 animate-pop">
+                <CM.Content className={cn(menuSurface, "min-w-40")}>
                   <CM.Item className={menuItem} onSelect={() => onOpen(n.id)}>
                     <NotebookPen /> Open
                   </CM.Item>
-                  <CM.Separator className="my-1 h-px bg-border" />
-                  <CM.Item className={cn(menuItem, "text-danger [&_svg]:text-danger")} onSelect={() => onDelete(n)}>
+                  <CM.Separator className={menuSeparator} />
+                  <CM.Item className={cn(menuItem, "text-danger [&_svg]:!text-danger")} onSelect={() => onDelete(n)}>
                     <Trash2 /> Delete
                   </CM.Item>
                 </CM.Content>

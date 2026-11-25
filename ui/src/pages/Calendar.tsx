@@ -62,20 +62,13 @@ export default function CalendarPage() {
   };
 
   const grid = (
-    <Card tone="workbench" className={cn("flex min-w-0 flex-col overflow-hidden", stacked ? "h-[min(520px,62%)] min-h-[296px] shrink-0" : "min-h-0 flex-1")}>
-      <div className="flex min-h-16 shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-3 py-2 sm:gap-2 sm:px-5">
-        <h2 className="page-title min-w-0 flex-1 truncate">{monthTitle.format(month)}</h2>
-        {events.isFetching && <Spinner />}
-        <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
-        <IconButton icon={ChevronLeft} label="Previous month" onClick={() => go(-1)} />
-        <IconButton icon={ChevronRight} label="Next month" onClick={() => go(1)} />
-      </div>
-      <div className="grid min-h-8 shrink-0 grid-cols-7 items-center border-b border-border bg-surface text-[13px] font-medium text-subtle">
+    <Card tone="window" className={cn("flex min-w-0 flex-col overflow-hidden", stacked ? "h-[min(520px,62%)] min-h-[296px] shrink-0" : "min-h-0 flex-1")}>
+      <div className="grid min-h-10 shrink-0 grid-cols-7 items-center border-b border-hairline text-xs font-medium text-muted-soft">
         {WEEKDAYS.map((d) => (
           <div key={d} className="px-2 sm:px-3">{width < 560 ? d[0] : d}</div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-border">
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-hairline">
         {Array.from({ length: 42 }, (_, i) => {
           const day = addDays(from, i);
           return (
@@ -102,18 +95,19 @@ export default function CalendarPage() {
   const writable = (calendars.data ?? []).filter((c) => c.writable);
   const writableLists = remindersOn ? (lists.data ?? []).filter((l) => l.writable) : [];
   const total = dayEvents.length + dayReminders.length;
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 1).getTime();
+  const inMonth = sorted.filter((e) => e.start < monthEnd && e.end >= month.getTime()).length;
+  const monthDetail = events.data ? `${inMonth} ${inMonth === 1 ? "event" : "events"} this month` : connected ? undefined : "Pair with your Mac to see your calendars.";
   const agenda = (
     <Card className={cn("flex flex-col overflow-hidden", stacked ? "min-h-52 flex-1" : "min-h-0 w-[320px] shrink-0")}>
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-control border border-border-strong bg-selected text-sm font-medium text-accent">
-          {selected.getDate()}
-        </span>
+      <header className="flex shrink-0 items-end gap-4 border-b border-hairline px-5 py-4">
+        <span aria-hidden className="font-display text-[56px] leading-[0.85] text-ink tabular-nums">{selected.getDate()}</span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-medium text-fg" title={agendaTitle.format(selected)}>{agendaTitle.format(selected)}</h2>
-          <p className="text-[13px] text-subtle">{summary(dayEvents.length, dayReminders.length)}</p>
+          <h2 className="truncate text-base font-medium text-ink" title={agendaTitle.format(selected)}>{agendaTitle.format(selected)}</h2>
+          <p className="text-[13px] text-muted-soft">{summary(dayEvents.length, dayReminders.length)}</p>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {events.isLoading ? (
           <Center><Spinner /></Center>
         ) : events.error ? (
@@ -125,7 +119,7 @@ export default function CalendarPage() {
             {dayEvents.map((e) => <AgendaRow key={e.id + e.start} event={e} color={colorOf(e)} calendar={calendars.data?.find((c) => c.id === e.calendar_id)} />)}
             {dayReminders.length > 0 && (
               <>
-                <div className="px-2.5 pt-3 pb-1 text-[11px] font-medium tracking-wide text-subtle uppercase">Reminders</div>
+                <div className="border-b border-hairline px-4 pt-5 pb-2 text-[13px] font-medium text-muted-soft">Reminders</div>
                 {dayReminders.map((r) => <ReminderRow key={r.id} r={r} lists={lists.data} />)}
               </>
             )}
@@ -137,7 +131,11 @@ export default function CalendarPage() {
 
   return (
     <div ref={ref} className="flex h-full flex-col">
-      <WorkspaceHeading title="Calendar">
+      <WorkspaceHeading title={monthTitle.format(month)} detail={monthDetail}>
+        {events.isFetching && <Spinner />}
+        <Button variant="secondary" onClick={goToday}>Today</Button>
+        <IconButton icon={ChevronLeft} label="Previous month" variant="outline" onClick={() => go(-1)} />
+        <IconButton icon={ChevronRight} label="Next month" variant="outline" onClick={() => go(1)} />
         <Button variant="primary" icon={Plus} disabled={!connected || !(writable.length || writableLists.length)} onClick={() => setCreating(true)}>
           New item
         </Button>
@@ -171,13 +169,13 @@ function DayCell({ day, inMonth, today, selected, events, reminders, lists, colo
       aria-pressed={selected}
       className={cn(
         "relative flex min-h-0 flex-col overflow-hidden p-1.5 text-left outline-offset-[-2px] transition-colors duration-150 sm:p-2",
-        selected ? "bg-selected" : inMonth ? "bg-surface hover:bg-hover" : "bg-deep hover:bg-hover",
+        selected ? "bg-elevated" : inMonth ? "bg-canvas hover:bg-hover" : "bg-deep hover:bg-hover",
       )}
     >
       <span
         className={cn(
-          "flex h-5 min-w-5 items-center justify-center self-start rounded-full px-1 text-xs font-medium tabular-nums",
-          today ? "text-accent ring-1 ring-inset ring-accent" : inMonth ? "text-fg" : "text-subtle",
+          "flex h-6 min-w-6 items-center justify-center self-start rounded-full px-1 text-xs font-medium tabular-nums",
+          today ? "bg-primary text-on-primary" : inMonth ? "text-ink" : "text-muted-soft",
         )}
       >
         {day.getDate()}
@@ -194,18 +192,18 @@ function DayCell({ day, inMonth, today, selected, events, reminders, lists, colo
       ) : (
         <span className="mt-0.5 flex min-h-0 flex-1 flex-col gap-px overflow-hidden">
           {events.slice(0, 3).map((e) => (
-            <span key={e.id + e.start} className={cn("flex items-center gap-1.5 truncate text-[11px]", inMonth ? "text-muted" : "text-subtle")}>
+            <span key={e.id + e.start} className={cn("flex items-center gap-1.5 truncate text-[11px]", inMonth ? "text-body" : "text-muted-soft")}>
               <span className="size-1.5 shrink-0 rounded-full" style={{ background: colorOf(e) }} />
               <span className="truncate">{e.title}</span>
             </span>
           ))}
           {reminders.slice(0, Math.max(0, 3 - events.length)).map((r) => (
-            <span key={r.id} className={cn("flex items-center gap-1.5 truncate text-[11px]", inMonth ? "text-muted" : "text-subtle", r.completed && "line-through")}>
+            <span key={r.id} className={cn("flex items-center gap-1.5 truncate text-[11px]", inMonth ? "text-body" : "text-muted-soft", r.completed && "line-through")}>
               <Ring color={listColor(lists, r.list_id)} />
               <span className="truncate">{r.title}</span>
             </span>
           ))}
-          {events.length + reminders.length > 3 && <span className="pl-3 text-[10.5px] text-subtle">+{events.length + reminders.length - 3} more</span>}
+          {events.length + reminders.length > 3 && <span className="pl-3 text-[10.5px] text-muted-soft">+{events.length + reminders.length - 3} more</span>}
         </span>
       )}
     </button>
@@ -230,18 +228,18 @@ function AgendaRow({ event, color, calendar }: { event: CalendarEvent; color: st
     }
   };
   return (
-    <div className="group flex items-start gap-3 rounded-control px-2.5 py-2.5 hover:bg-raised" onMouseLeave={() => setConfirm(false)}>
+    <div className="group flex items-start gap-3 border-b border-hairline px-4 py-3 hover:bg-hover" onMouseLeave={() => setConfirm(false)}>
       <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: color }} />
       <div className="selectable min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-fg">{event.title || "Untitled"}</div>
-        <div className="text-xs text-muted">{when}{calendar ? ` · ${calendar.title}` : ""}</div>
+        <div className="text-sm font-medium text-ink">{event.title || "Untitled"}</div>
+        <div className="text-[13px] text-muted">{when}{calendar ? ` · ${calendar.title}` : ""}</div>
         {event.location && (
-          <div className="mt-0.5 flex items-center gap-1 text-xs text-subtle">
+          <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-soft">
             <MapPin className="size-3" />
             <span className="truncate">{event.location}</span>
           </div>
         )}
-        {event.notes && <div className="mt-1 line-clamp-3 text-xs text-subtle">{event.notes}</div>}
+        {event.notes && <div className="mt-1 line-clamp-3 text-xs text-muted-soft">{event.notes}</div>}
       </div>
       {calendar?.writable !== false &&
         (confirm ? (
@@ -319,13 +317,13 @@ function NewItemDialog({ day, calendars, lists, onClose }: { day: Date; calendar
         }}
       >
         {calendars.length > 0 && lists.length > 0 && (
-          <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-bg p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-control border border-hairline bg-deep p-1">
             {(["event", "reminder"] as const).map((k) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => setKind(k)}
-                className={cn("h-7 rounded-full text-xs font-medium transition-colors duration-200", kind === k ? "bg-raised text-fg" : "text-muted hover:text-fg")}
+                className={cn("nav-label h-8 rounded-sm text-[13px] transition-colors duration-200", kind === k ? "bg-elevated text-ink" : "text-muted hover:text-ink")}
               >
                 {k === "event" ? "Event" : "Reminder"}
               </button>

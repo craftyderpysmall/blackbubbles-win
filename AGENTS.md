@@ -72,7 +72,7 @@ The Windows app is single-instance, including across installed and dev builds. C
 ## UI conventions
 
 - Follow [DESIGN.md](DESIGN.md) for tokens, component states, spacing, and workspace layouts. Theme tokens live in `ui/src/index.css`. Shared primitives live in `ui/src/components/ui.tsx`.
-- Use solid graphite surfaces on true black, near-white primary actions, and silver-violet for focus, links, and selection. Keep semantic colors for status and user data.
-- Use bundled Cormorant Garamond Medium for display, Inter for controls and reading, and JetBrains Mono for fixed-width detail. Keep Segoe UI Emoji before the bundled subset fallback.
+- Follow the Claude system in DESIGN.md in its dark mode only: neutral near-black surfaces (`#0c0c0e` canvas), `#2a2a2b` hairlines, white and grey text, and coral as the single brand accent. Use the dark roles listed in DESIGN.md, with no glows, gradients or warm-brown surfaces. Use one coral primary action per workspace. Coral also marks focus, links and the active row.
+- Use bundled Cormorant Garamond Medium for serif display in place of Copernicus, Inter for controls and reading in place of StyreneB, and JetBrains Mono for fixed-width detail. Keep Segoe UI Emoji before the bundled subset fallback.
 - Check full, compact, and narrow layouts, including keyboard return from a detail pane. Keep readable text selectable, preserve visible focus, and respect reduced motion.
 - Keep dependency versions pinned. Use the existing React, Tailwind, Radix, Lucide and Tauri stack. Preserve unrelated changes, and run the relevant build and tests before committing.
