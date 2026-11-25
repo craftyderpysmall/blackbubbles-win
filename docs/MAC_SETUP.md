@@ -37,6 +37,8 @@ This does the following:
 2. **Calendars, Reminders and Photos.** macOS asks the first time a client opens those tabs. Click *Allow*, or allow them later under Privacy & Security.
 3. **Automation.** The first time you send a message or edit a note, macOS asks whether `bbd` may control Messages or Notes. Click *Allow*.
 
+iCloud only brings edits from your iPhone or other devices into the Mac's Notes database while Notes.app is running. So while BlackBubbles reads notes, `bbd` starts Notes.app hidden in the background if it isn't running. It opens no window and takes no focus. If you quit Notes, it comes back only the next time BlackBubbles loads notes.
+
 To edit a note protected by a custom Notes password, unlock it in BlackBubbles, edit the text, and open and unlock the same note in Apple Notes on the Mac before selecting **Save** in BlackBubbles. Leave the password protection on. Apple Notes handles the write and sync. Use Apple Notes directly for passcode-protected notes and protected notes with attachments or tables.
 
 ## 4. Pair your computers

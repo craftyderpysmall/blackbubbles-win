@@ -7,7 +7,7 @@
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bb_proto::{ApiError, ErrorCode, Event, EventSink, Note, NoteFolder, NoteSummary, Response};
 use rusqlite::{Connection, OptionalExtension};
@@ -19,7 +19,13 @@ const OBJECTS: &str = "ZICCLOUDSYNCINGOBJECT";
 pub struct Notes {
     db_path: PathBuf,
     conn: Mutex<Option<(Connection, Schema)>>,
+    /// Keep Notes.app running while clients read notes (see `keep_app_running`).
+    keep_app: bool,
+    app_checked: Mutex<Option<Instant>>,
 }
+
+/// How often a read may check that Notes.app is still running.
+const APP_CHECK_EVERY: Duration = Duration::from_secs(30);
 
 struct Schema {
     uuid: String,
@@ -153,7 +159,47 @@ fn self_get_unlocked(conn: &Connection, pk: i64, summary: NoteSummary) -> Result
 
 impl Notes {
     pub fn new(db_path: PathBuf) -> Self {
-        Self { db_path, conn: Mutex::new(None) }
+        Self { db_path, conn: Mutex::new(None), keep_app: false, app_checked: Mutex::new(None) }
+    }
+
+    /// The live store: iCloud only merges edits made on other devices into
+    /// `NoteStore.sqlite` while Notes.app runs on this Mac. Without it, an edit made on the
+    /// iPhone never reaches the database, so BlackBubbles keeps showing the old text (and
+    /// the next save through Notes.app launches it, which merges both edits at once).
+    pub fn keep_app_running(mut self) -> Self {
+        self.keep_app = true;
+        self
+    }
+
+    /// While a client reads notes, start Notes.app hidden in the background if it isn't
+    /// running (`open -g -j`: no window, no focus change). Checked at most every 30 s and
+    /// off the request path. A user who quits Notes gets it back only while BlackBubbles
+    /// is reading notes.
+    fn ensure_app_running(&self) {
+        if !self.keep_app {
+            return;
+        }
+        {
+            let mut checked = self.app_checked.lock().unwrap();
+            if checked.is_some_and(|at| at.elapsed() < APP_CHECK_EVERY) {
+                return;
+            }
+            *checked = Some(Instant::now());
+        }
+        #[cfg(target_os = "macos")]
+        std::thread::spawn(|| {
+            let running = std::process::Command::new("/usr/bin/pgrep")
+                .args(["-xq", "Notes"])
+                .status()
+                .is_ok_and(|s| s.success());
+            if !running {
+                match std::process::Command::new("/usr/bin/open").args(["-g", "-j", "-b", "com.apple.Notes"]).status() {
+                    Ok(s) if s.success() => eprintln!("notes: started Notes.app in the background so iCloud edits sync"),
+                    Ok(s) => eprintln!("notes: couldn't start Notes.app ({s})"),
+                    Err(e) => eprintln!("notes: couldn't start Notes.app: {e}"),
+                }
+            }
+        });
     }
 
     pub fn default_path() -> PathBuf {
@@ -184,6 +230,7 @@ impl Notes {
     }
 
     pub fn folders(&self) -> Result<Response, ApiError> {
+        self.ensure_app_running();
         self.with_conn(|conn, s| {
             let account = match s.folder_owner {
                 Some(owner) => format!("(SELECT a.ZNAME FROM {OBJECTS} a WHERE a.Z_PK = f.{owner})"),
@@ -253,6 +300,7 @@ impl Notes {
     }
 
     pub fn list(&self, folder_id: Option<&str>) -> Result<Response, ApiError> {
+        self.ensure_app_running();
         self.with_conn(|conn, s| {
             let folder = folder_id.map(|id| pk_from_id(id).ok_or_else(|| ApiError::not_found("folder"))).transpose()?;
             let mut stmt = conn.prepare_cached(&Self::summary_sql(s, "(?1 IS NULL OR n.ZFOLDER = ?1)")).map_err(sql_err)?;
@@ -265,6 +313,7 @@ impl Notes {
     }
 
     pub fn get(&self, id: &str) -> Result<Response, ApiError> {
+        self.ensure_app_running();
         let pk = pk_from_id(id).ok_or_else(|| ApiError::not_found("note"))?;
         self.with_conn(|conn, s| {
             let (summary, locked) = conn

@@ -83,7 +83,7 @@ impl MacBackend {
         Ok(Self {
             messages: Arc::new(messages::Messages::new(messages::Messages::default_path(), cache.clone())),
             contacts: contacts::Contacts::new(contacts::Contacts::default_root()),
-            notes: Arc::new(notes::Notes::new(notes::Notes::default_path())),
+            notes: Arc::new(notes::Notes::new(notes::Notes::default_path()).keep_app_running()),
             voice_memos: Arc::new(voicememos::VoiceMemos::new(voicememos::VoiceMemos::default_dir(), cache.clone())),
             findmy: findmy::FindMy::new(data_dir),
             #[cfg(target_os = "macos")]
