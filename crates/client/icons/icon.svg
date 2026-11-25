@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1c1c1c"/>
-      <stop offset="1" stop-color="#121212"/>
-    </linearGradient>
-  </defs>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#g)" stroke="#404040" stroke-width="8"/>
-  <path d="M300 330h330a110 110 0 0 1 110 110v70a110 110 0 0 1-110 110H450l-130 92v-94a110 110 0 0 1-130-108v-70A110 110 0 0 1 300 330Z" fill="#fafafa"/>
-  <circle cx="742" cy="700" r="88" fill="#737373"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 24 24">
+  <!-- The header mark: Lucide's message-circle in coral (#cc785c, DESIGN.md primary) at the
+       UI's 2.25 stroke, on a transparent background. -->
+  <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" fill="none" stroke="#cc785c" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
