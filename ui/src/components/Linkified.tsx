@@ -27,7 +27,7 @@ export function Linkified({ text }: { text: string }) {
               e.preventDefault();
               void openUrl(p.url);
             }}
-            className="cursor-pointer underline decoration-current/40 underline-offset-2 hover:decoration-current"
+            className="cursor-pointer text-accent underline decoration-current/55 underline-offset-2 hover:text-accent-strong hover:decoration-current"
           >
             {p.url}
           </a>

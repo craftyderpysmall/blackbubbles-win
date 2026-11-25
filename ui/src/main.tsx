@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "@fontsource-variable/cormorant-garamond/wght.css";
 import "@fontsource-variable/inter";
 import "@fontsource/jetbrains-mono/400.css";
 // Colour emoji everywhere, bundled and split by unicode-range so only used glyphs load.

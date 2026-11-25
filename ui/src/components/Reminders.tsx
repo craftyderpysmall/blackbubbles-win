@@ -92,7 +92,7 @@ export function ReminderCheck({ done, onClick }: { done: boolean; onClick: () =>
       aria-label={done ? "Mark as not done" : "Mark as done"}
       className={cn(
         "mt-px flex size-[18px] shrink-0 items-center justify-center rounded-full border transition-colors duration-200",
-        done ? "border-fg bg-fg text-primary-fg" : "border-border-strong hover:border-muted",
+        done ? "border-accent bg-selected text-accent" : "border-control-border hover:border-accent",
       )}
     >
       {done && <Check className="size-3 animate-pop" strokeWidth={3} />}
@@ -107,7 +107,7 @@ export function ReminderRow({ r, lists, showList = true }: { r: Reminder; lists?
   const due = dueLabel(r);
   const overdue = isOverdue(r);
   return (
-    <div className="group flex items-start gap-3 rounded-control px-2.5 py-2 hover:bg-raised" onMouseLeave={() => setConfirm(false)}>
+    <div className="group flex items-start gap-3 rounded-control px-2.5 py-2 hover:bg-hover" onMouseLeave={() => setConfirm(false)}>
       <ReminderCheck done={r.completed} onClick={() => void toggle(r)} />
       <div className={cn("selectable min-w-0 flex-1 transition-opacity duration-300", r.completed && "opacity-50")}>
         <div className={cn("text-[13px] text-fg", r.completed && "line-through decoration-subtle")}>

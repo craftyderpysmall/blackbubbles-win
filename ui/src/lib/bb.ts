@@ -73,7 +73,7 @@ export interface NoteSummary {
   title: string;
   snippet: string;
   modified: Timestamp;
-  /** Password-protected in Notes: body unreadable here, editing refused. */
+  /** Password-protected in Notes. The body requires a successful unlock. */
   locked: boolean;
 }
 export interface Note {
@@ -277,7 +277,7 @@ export const api = {
   createNote: (folder_id: string | null, body: string) =>
     call<{ id: string }, "Created">({ CreateNote: { folder_id, body } }, "Created"),
   updateNote: (id: string, body: string) => ok({ UpdateNote: { id, body } }),
-  /** Decrypt a password-locked note (read-only). The password goes to your Mac only. */
+  /** Decrypt a protected note and authorize writes on this connection. */
   unlockNote: (id: string, password: string) => call<Note, "Note">({ UnlockNote: { id, password } }, "Note"),
   /** Move a note to Recently Deleted. */
   deleteNote: (id: string) => ok({ DeleteNote: { id } }),

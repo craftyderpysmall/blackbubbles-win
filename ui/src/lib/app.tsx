@@ -99,7 +99,39 @@ export function useWidth<T extends HTMLElement>(): [React.RefCallback<T>, number
   return [ref, w];
 }
 
-/** Breakpoints carried over from the egui client. */
-export const RAIL_COMPACT_BELOW = 1040;
+/** Restore keyboard focus when a compact detail pane returns to its index. */
+export function useReturnFocus() {
+  const source = useRef<{ control: HTMLElement; index: HTMLElement | null; item?: string } | null>(null);
+  const remember = () => {
+    const control = document.activeElement;
+    if (control instanceof HTMLElement) {
+      source.current = { control, index: control.closest("[data-pane-index]"), item: control.dataset.paneItem };
+    }
+  };
+  const restore = () => {
+    const target = source.current;
+    if (!target) return;
+    const focusControl = () => {
+      // A virtual list can replace the original row while its pane is hidden.
+      const replacement = target.item == null ? null : target.index?.querySelector<HTMLElement>(
+        `[data-pane-item="${CSS.escape(target.item)}"]`,
+      );
+      const control = replacement ?? target.control;
+      if (!control.getClientRects().length) return false;
+      control.focus();
+      return true;
+    };
+    requestAnimationFrame(() => {
+      if (!focusControl()) {
+        requestAnimationFrame(() => {
+          if (!focusControl()) target.index?.focus();
+        });
+      }
+    });
+  };
+  return { remember, restore };
+}
+
+/** Minimum widths for the split workspaces. */
 export const NARROW_BELOW = 760;
 export const CALENDAR_STACK_BELOW = 980;

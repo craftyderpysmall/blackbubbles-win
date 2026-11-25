@@ -3,10 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CalendarClock, CalendarDays, CheckCircle2, Inbox, ListChecks, Plus, type LucideIcon } from "lucide-react";
 import { api, errorText, type Reminder, type ReminderList } from "@/lib/bb";
 import { keys } from "@/lib/events";
-import { NARROW_BELOW, useApp, useWidth } from "@/lib/app";
+import { NARROW_BELOW, useApp, useReturnFocus, useWidth } from "@/lib/app";
 import { sameDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Button, Card, Center, EmptyState, IconButton, Input, Spinner, Switch } from "@/components/ui";
+import { Button, Card, Center, EmptyState, IconButton, Input, PaneHeader, Spinner, Switch, WorkspaceHeading } from "@/components/ui";
 import { isOverdue, listColor, ReminderRow, stillShown, useReminderLists, useReminders, type LocalReminder } from "@/components/Reminders";
 
 type Smart = "today" | "scheduled" | "all" | "completed";
@@ -27,6 +27,7 @@ const dueToday = (r: LocalReminder) => r.due !== null && (sameDay(new Date(r.due
 export default function RemindersPage() {
   const { connected } = useApp();
   const [ref, width] = useWidth<HTMLDivElement>();
+  const paneFocus = useReturnFocus();
   const [view, setView] = useState<View>({ smart: "today" });
   const [picked, setPicked] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -65,14 +66,15 @@ export default function RemindersPage() {
   const narrow = width > 0 && width < NARROW_BELOW;
   const title = "list" in view ? (lists.data?.find((l) => l.id === view.list)?.title ?? "List") : SMART.find(([id]) => id === view.smart)![2];
   const choose = (v: View) => {
+    paneFocus.remember();
     setView(v);
     setPicked(true);
   };
 
   const sidebar = (
-    <Card className="flex min-w-0 flex-col overflow-hidden" style={narrow ? { flex: 1 } : { width: Math.min(320, Math.max(260, width * 0.3)) }}>
-      <div className="p-4 pb-2">
-        <h1 className="text-[15px] font-semibold text-fg">Reminders</h1>
+    <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow && picked && "hidden")} style={narrow ? { flex: 1 } : { width: Math.min(320, Math.max(260, width * 0.3)) }}>
+      <div className="mb-3 border-b border-border p-4">
+        <h2 className="text-lg font-medium text-fg">Lists</h2>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
         <div className="grid grid-cols-2 gap-2">
@@ -82,15 +84,17 @@ export default function RemindersPage() {
             return (
               <button
                 key={id}
+                data-pane-item={`category:${id}`}
+                aria-pressed={active}
                 onClick={() => choose({ smart: id })}
                 className={cn(
                   "flex flex-col gap-2 rounded-control border p-3 text-left transition-colors duration-150",
-                  active ? "border-border-strong bg-raised" : "border-border hover:bg-raised",
+                  active ? "border-border-strong bg-selected" : "border-border bg-deep hover:bg-hover",
                 )}
               >
                 <span className="flex items-center justify-between">
                   <Icon className={cn("size-[18px]", active ? "text-fg" : "text-muted")} />
-                  <span className="text-[17px] font-semibold text-fg tabular-nums">{count ?? "–"}</span>
+                  <span className="font-mono text-lg text-fg tabular-nums">{count ?? "–"}</span>
                 </span>
                 <span className="text-xs font-medium text-muted">{name}</span>
               </button>
@@ -106,11 +110,13 @@ export default function RemindersPage() {
             return (
               <button
                 key={l.id}
+                data-pane-item={`list:${l.id}`}
+                aria-current={active || undefined}
                 onClick={() => choose({ list: l.id })}
-                className={cn("flex h-10 w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150", active ? "bg-border" : "hover:bg-raised")}
+                className="list-row flex h-11 w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150 hover:bg-hover"
               >
-                <span className="flex size-6 items-center justify-center rounded-full" style={{ background: listColor(lists.data, l.id) }}>
-                  <ListChecks className="size-3.5 text-bg" strokeWidth={2.5} />
+                <span className="flex size-7 items-center justify-center rounded-control border border-border-strong bg-deep" style={{ color: listColor(lists.data, l.id) }}>
+                  <ListChecks className="size-3.5" />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{l.title}</span>
                 <span className="text-xs text-subtle tabular-nums">{counts.byList(l.id)}</span>
@@ -124,19 +130,18 @@ export default function RemindersPage() {
 
   const groups = useMemo(() => groupFor(view, shown, lists.data), [view, shown, lists.data]);
   const main = (
-    <Card className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="flex min-h-14 items-center gap-2 border-b border-border px-3 py-2">
-        {narrow && <IconButton icon={ArrowLeft} label="Back" onClick={() => setPicked(false)} />}
-        <div className="min-w-0 flex-1 pl-1">
-          <div className="truncate text-[14px] font-semibold text-fg">{title}</div>
-          <div className="text-xs text-subtle">{shown.filter((r) => !r.completed).length} open</div>
-        </div>
+    <Card tone="workbench" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <PaneHeader
+        title={title}
+        subtitle={`${shown.filter((r) => !r.completed).length} open`}
+        leading={narrow && <IconButton icon={ArrowLeft} label="Back" onClick={() => { setPicked(false); paneFocus.restore(); }} autoFocus />}
+      >
         {!("smart" in view && (view.smart === "completed" || view.smart === "today")) && (
           <div className="w-44">
             <Switch checked={showCompleted} onChange={setShowCompleted} label="Show completed" />
           </div>
         )}
-      </div>
+      </PaneHeader>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {source.isLoading ? (
           <Center><Spinner /></Center>
@@ -162,9 +167,12 @@ export default function RemindersPage() {
   );
 
   return (
-    <div ref={ref} className="flex h-full gap-4">
-      {(!narrow || !picked) && sidebar}
-      {(!narrow || picked) && main}
+    <div ref={ref} className="flex h-full flex-col">
+      <WorkspaceHeading title="Reminders" />
+      <div className="flex min-h-0 flex-1 gap-4 sm:gap-6">
+        {sidebar}
+        {(!narrow || picked) && main}
+      </div>
     </div>
   );
 }

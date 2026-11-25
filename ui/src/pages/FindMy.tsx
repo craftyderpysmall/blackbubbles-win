@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import { api, errorText, type FindMyDevice } from "@/lib/bb";
 import { keys } from "@/lib/events";
-import { NARROW_BELOW, useApp, useWidth } from "@/lib/app";
+import { NARROW_BELOW, useApp, useReturnFocus, useWidth } from "@/lib/app";
 import { ago, longTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Button, Card, Center, EmptyState, IconButton, Spinner } from "@/components/ui";
+import { Button, Card, Center, EmptyState, IconButton, Spinner, WorkspaceHeading } from "@/components/ui";
 
 const REFRESH_MS = 60_000;
 
@@ -28,13 +28,14 @@ function deviceIcon(d: FindMyDevice): LucideIcon {
   return Smartphone;
 }
 
-/** Translucent floating layer over the map (blur + soft shadow, per the theme). */
-const glass = "border border-border bg-surface/85 shadow-soft backdrop-blur-xl";
+/** Keep controls legible over street and terrain detail. */
+const mapPanel = "border border-border-strong bg-raised";
 
 export default function FindMyPage() {
   const { connected, config } = useApp();
   const family = config.services.find_my_family;
   const [ref, width] = useWidth<HTMLDivElement>();
+  const paneFocus = useReturnFocus();
   const [selected, setSelected] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(true);
   const devices = useQuery({ queryKey: [...keys.findMy, family], queryFn: () => api.findMy(family), enabled: connected, refetchInterval: REFRESH_MS });
@@ -44,7 +45,10 @@ export default function FindMyPage() {
 
   const pick = (id: string | null) => {
     setSelected(id);
-    if (narrow && id) setListOpen(false);
+    if (narrow && id && listOpen) {
+      paneFocus.remember();
+      setListOpen(false);
+    }
   };
 
   const panel = (
@@ -60,26 +64,23 @@ export default function FindMyPage() {
     />
   );
 
-  if (narrow && listOpen) return <div ref={ref} className="h-full"><Card className="flex h-full flex-col overflow-hidden">{panel}</Card></div>;
-
   return (
-    <div ref={ref} className="h-full">
-      <Card className="relative h-full overflow-hidden">
-        <DeviceMap devices={list} selected={selected} onSelect={pick} leftInset={!narrow && listOpen ? 312 : 0} />
-        {/* Device list floats over the map, like Apple's Find My. */}
-        {!narrow && listOpen && (
-          <div className={cn("absolute top-3 left-3 z-[500] flex max-h-[calc(100%-24px)] w-[300px] flex-col overflow-hidden rounded-card animate-enter", glass)}>{panel}</div>
+    <div ref={ref} className="flex h-full flex-col">
+      <WorkspaceHeading title="Find My" detail={devices.data && `${list.length} ${list.length === 1 ? "device" : "devices"}`}>
+        {!narrow && <Button variant="outline" icon={List} aria-pressed={listOpen} onClick={() => setListOpen(!listOpen)}>{listOpen ? "Hide devices" : "Show devices"}</Button>}
+        {narrow && !listOpen && <Button variant="outline" icon={ArrowLeft} onClick={() => { setListOpen(true); paneFocus.restore(); }} autoFocus>Devices</Button>}
+      </WorkspaceHeading>
+      <div className="flex min-h-0 flex-1 gap-6">
+        <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow ? "flex-1" : "w-[290px] shrink-0", !listOpen && "hidden")}>
+          {panel}
+        </Card>
+        {(!narrow || !listOpen) && (
+          <Card tone="workbench" className="relative min-w-0 flex-1 overflow-hidden">
+            <DeviceMap devices={list} selected={selected} onSelect={pick} />
+            {device && <DeviceCard device={device} onClose={() => setSelected(null)} />}
+          </Card>
         )}
-        <div className="absolute top-3 z-[500] flex gap-2" style={{ left: !narrow && listOpen ? 316 : 12 }}>
-          {(narrow || !listOpen) && (
-            <Button className={glass} icon={narrow ? ArrowLeft : List} onClick={() => setListOpen(true)}>
-              Devices
-            </Button>
-          )}
-          {!narrow && listOpen && <IconButton icon={X} label="Hide device list" className={glass} onClick={() => setListOpen(false)} />}
-        </div>
-        {device && <DeviceCard device={device} onClose={() => setSelected(null)} narrow={narrow} listOpen={listOpen} />}
-      </Card>
+      </div>
     </div>
   );
 }
@@ -98,10 +99,10 @@ function DeviceList(props: {
   const lowAt = config.notifications.low_battery_percent / 100;
   return (
     <>
-      <div className="flex items-center gap-2 px-4 pt-3.5 pb-2">
+      <div className="mb-2 flex items-center gap-2 border-b border-border px-4 py-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[15px] font-semibold text-fg">Find My</h1>
-          <div className="text-xs text-subtle">{props.updatedAt ? `Updated ${ago(props.updatedAt)}` : "Your devices and this PC"}</div>
+          <h2 className="text-lg font-medium text-fg">Devices</h2>
+          {props.updatedAt > 0 && <div className="mt-1 text-xs text-subtle">Updated {ago(props.updatedAt)}</div>}
         </div>
         {props.fetching ? <Spinner /> : <IconButton icon={RotateCw} label="Refresh" onClick={props.onRefresh} />}
       </div>
@@ -120,10 +121,12 @@ function DeviceList(props: {
             return (
               <button
                 key={d.id}
+                data-pane-item={d.id}
                 onClick={() => props.onSelect(d.id)}
-                className={cn("flex w-full items-center gap-3 rounded-control px-2.5 py-2.5 text-left transition-colors duration-150", active ? "bg-raised" : "hover:bg-raised/70")}
+                aria-current={active || undefined}
+                className="list-row flex w-full items-center gap-3 rounded-control px-2.5 py-2.5 text-left transition-colors duration-150 hover:bg-hover"
               >
-                <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", active ? "bg-primary text-primary-fg" : "border border-border-strong bg-raised text-fg")}>
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-control border border-border-strong bg-deep text-fg">
                   <Icon className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -144,7 +147,7 @@ function DeviceList(props: {
   );
 }
 
-function DeviceCard({ device, onClose, narrow, listOpen }: { device: FindMyDevice; onClose: () => void; narrow: boolean; listOpen: boolean }) {
+function DeviceCard({ device, onClose }: { device: FindMyDevice; onClose: () => void }) {
   const { config } = useApp();
   const Icon = deviceIcon(device);
   const loc = device.location;
@@ -154,8 +157,7 @@ function DeviceCard({ device, onClose, narrow, listOpen }: { device: FindMyDevic
   return (
     <div
       key={device.id}
-      className={cn("absolute bottom-3 z-[500] w-[min(360px,calc(100%-24px))] rounded-card p-4 animate-enter", glass)}
-      style={narrow ? { left: 12 } : { left: listOpen ? 316 : 12 }}
+      className={cn("absolute bottom-3 left-3 z-[500] w-[min(360px,calc(100%-72px))] rounded-card p-4 animate-enter", mapPanel)}
     >
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-fg">
@@ -210,19 +212,20 @@ function iconSvg(Icon: LucideIcon, size: number) {
   return bySize.get(size)!;
 }
 
-/** A round device badge; the selected one is the inverted white pin with its name. */
+/** The selected device uses a larger square badge and shows its name. */
 function markerEl(d: FindMyDevice, selected: boolean, onClick: () => void) {
   const size = selected ? 40 : 32;
   const el = document.createElement("button");
   el.className = "bb-marker";
   el.title = d.name;
+  el.setAttribute("aria-pressed", String(selected));
   // No `position` here: MapLibre positions markers absolutely (which also anchors the label).
   el.style.cssText = `width:${size}px;height:${size}px;padding:0;border:0;background:none`;
-  const style = selected ? "background:#fafafa;color:#171717;border:2px solid #fafafa" : "background:#2a2a2a;color:#fafafa;border:1.5px solid #737373";
+  const style = selected ? "rounded-control border-accent bg-selected text-accent" : "rounded-full border-control-border bg-raised text-fg";
   const label = selected
-    ? `<div style="position:absolute;top:${size + 6}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgb(23 23 23/.9);border:1px solid #262626;color:#fafafa;border-radius:999px;padding:2px 9px;font:500 11px var(--font-sans)">${escapeHtml(d.name)}</div>`
+    ? `<div class="absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-full border border-border-strong bg-raised px-2.5 py-1 text-[13px] text-fg">${escapeHtml(d.name)}</div>`
     : "";
-  el.innerHTML = `<div style="width:100%;height:100%;border-radius:999px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgb(0 0 0/.55);${style}">${iconSvg(deviceIcon(d), selected ? 18 : 15)}</div>${label}`;
+  el.innerHTML = `<div class="grid size-full place-items-center border-2 ${style}">${iconSvg(deviceIcon(d), selected ? 18 : 15)}</div>${label}`;
   el.addEventListener("click", (e) => {
     e.stopPropagation();
     onClick();
@@ -259,9 +262,10 @@ function bounds(devices: FindMyDevice[]) {
   return b;
 }
 
-function DeviceMap({ devices, selected, onSelect, leftInset }: { devices: FindMyDevice[]; selected: string | null; onSelect: (id: string) => void; leftInset: number }) {
-  // Keep devices clear of the floating list when fitting the view.
-  const padding = { top: 90, bottom: 90, right: 90, left: 90 + leftInset };
+const MAP_PADDING = 56;
+const mapMotionDuration = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700;
+
+function DeviceMap({ devices, selected, onSelect }: { devices: FindMyDevice[]; selected: string | null; onSelect: (id: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const markers = useRef<MlMarker[]>([]);
@@ -291,8 +295,8 @@ function DeviceMap({ devices, selected, onSelect, leftInset }: { devices: FindMy
     m.touchZoomRotate.disableRotation();
     m.on("load", () => {
       m.addSource("accuracy", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "accuracy-fill", type: "fill", source: "accuracy", paint: { "fill-color": "#fafafa", "fill-opacity": 0.07 } });
-      m.addLayer({ id: "accuracy-line", type: "line", source: "accuracy", paint: { "line-color": "#fafafa", "line-opacity": 0.3, "line-width": 1 } });
+      m.addLayer({ id: "accuracy-fill", type: "fill", source: "accuracy", paint: { "fill-color": "#b7b9f2", "fill-opacity": 0.07 } });
+      m.addLayer({ id: "accuracy-line", type: "line", source: "accuracy", paint: { "line-color": "#b7b9f2", "line-opacity": 0.3, "line-width": 1 } });
       setReady(true);
     });
     m.on("error", (e) => console.warn("map:", e.error?.message));
@@ -319,18 +323,18 @@ function DeviceMap({ devices, selected, onSelect, leftInset }: { devices: FindMy
     source?.setData({ type: "FeatureCollection", features: sel ? [circle(sel.location!.lon, sel.location!.lat, sel.location!.accuracy_m)] : [] });
     if (!fitted.current && located.length) {
       fitted.current = true;
-      m.fitBounds(bounds(located), { padding, maxZoom: 15, animate: false });
+      m.fitBounds(bounds(located), { padding: MAP_PADDING, maxZoom: 15, animate: false });
     }
   }, [devices, selected, onSelect, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const d = devices.find((x) => x.id === selected);
-    if (d?.location && map.current) map.current.flyTo({ center: [d.location.lon, d.location.lat], zoom: Math.max(map.current.getZoom(), 16), duration: 700, padding: { top: 0, bottom: 0, right: 0, left: leftInset } });
+    if (d?.location && map.current) map.current.flyTo({ center: [d.location.lon, d.location.lat], zoom: Math.max(map.current.getZoom(), 16), duration: mapMotionDuration() });
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fitAll = () => {
     const located = devices.filter((d) => d.location);
-    if (map.current && located.length) map.current.fitBounds(bounds(located), { padding, maxZoom: 15, duration: 700 });
+    if (map.current && located.length) map.current.fitBounds(bounds(located), { padding: MAP_PADDING, maxZoom: 15, duration: mapMotionDuration() });
   };
 
   return (
@@ -344,7 +348,7 @@ function DeviceMap({ devices, selected, onSelect, leftInset }: { devices: FindMy
           <EmptyState icon={MapPin} title="The map couldn't start" hint={`It needs WebGL. ${failed}`} />
         </div>
       )}
-      <div className={cn("absolute right-3 bottom-10 z-[500] flex flex-col overflow-hidden rounded-control", glass)}>
+      <div className={cn("absolute right-3 bottom-10 z-[500] flex flex-col overflow-hidden rounded-control", mapPanel)}>
         <IconButton icon={Plus} label="Zoom in" className="rounded-none" onClick={() => map.current?.zoomIn()} />
         <div className="mx-2 h-px bg-border" />
         <IconButton icon={Minus} label="Zoom out" className="rounded-none" onClick={() => map.current?.zoomOut()} />

@@ -1,18 +1,21 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Tabs } from "radix-ui";
 import { AudioLines, Bell, Calendar, Check, Image, Info, Keyboard, LayoutGrid, Link2, ListChecks, Mail, MapPin, MessageCircle, NotebookPen, Phone, Plus, Power, Trash2, type LucideIcon } from "lucide-react";
 import { errorText, native, type ConfigView, type Notifications, type Services } from "@/lib/bb";
 import { useApp } from "@/lib/app";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, Input, Switch } from "@/components/ui";
+import { Badge, Button, Card, Input, Switch, WorkspaceHeading } from "@/components/ui";
 
 function Section({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description?: string; children: ReactNode }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2">
-        <Icon className="size-4 text-fg" />
-        <h2 className="text-[14px] font-semibold text-fg">{title}</h2>
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-control border border-border-strong bg-raised">
+          <Icon className="size-4 text-fg" />
+        </span>
+        <h2 className="text-lg font-medium text-fg">{title}</h2>
       </div>
-      {description && <p className="mt-1 text-xs text-subtle">{description}</p>}
+      {description && <p className="mt-2 text-sm text-muted">{description}</p>}
       <div className="mt-3">{children}</div>
     </Card>
   );
@@ -55,33 +58,63 @@ function NumberField({ label, suffix, value, min, max, onChange, disabled }: { l
 }
 
 function Code({ children }: { children: ReactNode }) {
-  return <code className="selectable block overflow-x-auto rounded-control border border-border bg-bg px-3 py-2 font-mono text-[12px] whitespace-pre text-fg">{children}</code>;
+  return <code className="selectable block overflow-x-auto rounded-control border border-border bg-deep px-4 py-3 font-mono text-[13px] whitespace-pre text-body">{children}</code>;
 }
 
 export default function SettingsPage() {
   const { boot, config } = useApp();
+  const sectionScroll = useRef<HTMLDivElement>(null);
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[760px] flex-col gap-4 pb-4">
-        <h1 className="px-1 pt-1 text-[20px] font-semibold tracking-tight text-fg">Settings</h1>
-        <Connection />
-        <SendingAddress />
-        <ServiceSettings />
-        <NotificationSettings />
-        <StartupSettings />
-        <AutofillSettings />
-        <Section icon={Info} title="About">
-          <div className="selectable space-y-1 text-xs text-muted">
-            <div>BlackBubbles {boot.version}</div>
-            <div className="text-subtle">Settings file: {boot.config_path}</div>
-            <div className="text-subtle">
-              {boot.primary ? "This app handles autofill and notifications, also while it's in the tray." : "Another BlackBubbles process handles autofill and notifications."}
-            </div>
-            {!config.server && <div className="text-subtle">Not paired yet.</div>}
-          </div>
-        </Section>
-      </div>
-    </div>
+    <section className="flex h-full flex-col">
+      <WorkspaceHeading title="Settings" />
+      <Tabs.Root defaultValue="connection" onValueChange={() => sectionScroll.current?.scrollTo(0, 0)} className="flex min-h-0 flex-1 flex-col gap-4 sm:gap-6">
+        <Tabs.List aria-label="Settings sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-border pb-3">
+          {[
+            ["connection", "Connection"],
+            ["services", "Services"],
+            ["notifications", "Notifications"],
+            ["autofill", "Autofill"],
+            ["app", "App"],
+          ].map(([id, label]) => (
+            <Tabs.Trigger
+              key={id}
+              value={id}
+              className="h-9 shrink-0 rounded-control px-3 text-sm font-medium text-muted hover:bg-hover data-[state=active]:bg-selected data-[state=active]:text-fg"
+            >
+              {label}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        <div ref={sectionScroll} className="min-h-0 flex-1 overflow-y-auto">
+          <Tabs.Content value="connection" forceMount className="grid max-w-[1120px] gap-4 data-[state=inactive]:hidden lg:grid-cols-[1.2fr_1fr] lg:items-start">
+            <Connection />
+            <SendingAddress />
+          </Tabs.Content>
+          <Tabs.Content value="services" forceMount className="max-w-3xl data-[state=inactive]:hidden">
+            <ServiceSettings />
+          </Tabs.Content>
+          <Tabs.Content value="notifications" forceMount className="max-w-3xl data-[state=inactive]:hidden">
+            <NotificationSettings />
+          </Tabs.Content>
+          <Tabs.Content value="autofill" forceMount className="max-w-3xl data-[state=inactive]:hidden">
+            <AutofillSettings />
+          </Tabs.Content>
+          <Tabs.Content value="app" forceMount className="grid max-w-[1120px] gap-4 data-[state=inactive]:hidden lg:grid-cols-2 lg:items-start">
+            <StartupSettings />
+            <Section icon={Info} title="About">
+              <div className="selectable space-y-1 break-words text-sm text-muted">
+                <div>BlackBubbles {boot.version}</div>
+                <div className="text-subtle">Settings file: {boot.config_path}</div>
+                <div className="text-subtle">
+                  {boot.primary ? "This app handles autofill and notifications, also while it's in the tray." : "Another BlackBubbles process handles autofill and notifications."}
+                </div>
+                {!config.server && <div className="text-subtle">Not paired yet.</div>}
+              </div>
+            </Section>
+          </Tabs.Content>
+        </div>
+      </Tabs.Root>
+    </section>
   );
 }
 
@@ -98,11 +131,11 @@ function useSaver() {
 }
 
 function Connection() {
-  const { boot, config, status } = useApp();
-  const save = useSaver();
+  const { boot, config, status, setConfig, toast } = useApp();
   const [uri, setUri] = useState("");
   const [name, setName] = useState(boot.device_name);
   const [busy, setBusy] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
   const [text, dot] =
     status.state === "Connected"
       ? [`Connected to ${status.detail.server_name}`, "var(--color-success)"]
@@ -113,34 +146,57 @@ function Connection() {
           : ["Not paired", "var(--color-subtle)"];
 
   const pair = async () => {
+    if (busy || !uri.trim().startsWith("blackbubbles://")) return;
     setBusy(true);
-    await save(native.pair(uri, name), "Paired with your Mac").then(() => setUri(""));
-    setBusy(false);
+    setPairError(null);
+    try {
+      setConfig(await native.pair(uri.trim(), name));
+      setUri("");
+      toast("Paired with your Mac");
+    } catch (error) {
+      setPairError(errorText(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <Section icon={Link2} title="Mac connection">
+    <Section icon={Link2} title={config.server ? "Mac connection" : "Pair with your Mac"}>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge dot={dot} className="max-w-full">{text}</Badge>
-        {config.server && (
-          <span className="selectable truncate text-xs text-subtle">
-            {config.server.host}:{config.server.port} · pinned {config.server.fingerprint.slice(0, 12)}…
-          </span>
-        )}
+        <Badge dot={dot} title={text}>{text}</Badge>
       </div>
-      <p className="mt-3 text-xs text-muted">
-        On your Mac, run <code className="font-mono text-fg">bbd pair --host &lt;its name or Tailscale IP&gt;</code> and paste the result here.
-      </p>
-      <div className="mt-2 flex flex-col gap-2">
-        <Input placeholder="blackbubbles://…" value={uri} onChange={(e) => setUri(e.target.value)} className="font-mono text-[12px]" />
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted">Device name</span>
-          <Input value={name} onChange={(e) => setName(e.target.value)} className="h-8 w-56 flex-1" />
-          <Button variant="primary" icon={Link2} busy={busy} disabled={!uri.trim().startsWith("blackbubbles://")} onClick={pair}>
+      {config.server && (
+        <div className="mt-3">
+          <Code>{config.server.host}:{config.server.port} · pinned {config.server.fingerprint.slice(0, 12)}…</Code>
+        </div>
+      )}
+      <div className="mt-4 space-y-2">
+        <p className="text-sm text-muted" id="pairing-help">Run this command on your Mac and paste the pairing URI below.</p>
+        <Code>bbd pair --host &lt;Mac hostname or Tailscale IP&gt;</Code>
+      </div>
+      <form className="mt-4 grid gap-3" onSubmit={(event) => { event.preventDefault(); void pair(); }}>
+        <label className="grid gap-1.5 text-sm text-body">
+          Pairing URI
+          <Input
+            placeholder="blackbubbles://…"
+            value={uri}
+            onChange={(e) => setUri(e.target.value)}
+            aria-describedby={pairError ? "pairing-help pairing-error" : "pairing-help"}
+            aria-invalid={pairError ? true : undefined}
+            className="font-mono text-[13px]"
+          />
+        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid min-w-40 flex-1 gap-1.5 text-sm text-body">
+            Windows device name
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <Button type="submit" variant="primary" icon={Link2} busy={busy} disabled={!uri.trim().startsWith("blackbubbles://")}>
             {busy ? "Pairing…" : "Pair"}
           </Button>
         </div>
-      </div>
+        {pairError && <p id="pairing-error" role="alert" className="text-sm text-danger">{pairError}</p>}
+      </form>
     </Section>
   );
 }
@@ -264,12 +320,12 @@ function NotificationSettings() {
           {sw("connection", "Connection lost / restored", "After the Mac has been unreachable for 90 s")}
           {sw("quiet_hours", "Quiet hours", "Nothing is shown during this window")}
           <Nested disabled={!n.quiet_hours}>
-            <div className="flex items-center justify-between gap-2 px-1 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-2">
               <span className="text-[13px] text-fg">From</span>
               <span className="flex items-center gap-2">
-                <Input type="time" value={n.quiet_start} onChange={(e) => e.target.value && set({ quiet_start: e.target.value })} className="h-8 w-28" />
+                <Input type="time" aria-label="Quiet hours start" value={n.quiet_start} onChange={(e) => e.target.value && set({ quiet_start: e.target.value })} className="h-8 w-24" />
                 <span className="text-xs text-subtle">to</span>
-                <Input type="time" value={n.quiet_end} onChange={(e) => e.target.value && set({ quiet_end: e.target.value })} className="h-8 w-28" />
+                <Input type="time" aria-label="Quiet hours end" value={n.quiet_end} onChange={(e) => e.target.value && set({ quiet_end: e.target.value })} className="h-8 w-24" />
               </span>
             </div>
           </Nested>

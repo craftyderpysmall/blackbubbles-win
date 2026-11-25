@@ -8,12 +8,12 @@ export function cn(...inputs: ClassValue[]) {
 /** Calendars carry their own colours; map them onto the desaturated semantic palette by
  *  nearest hue, so the UI stays monochrome-first. */
 const SEMANTIC: [number, string][] = [
-  [215, "var(--color-info)"],
+  [215, "var(--color-accent)"],
   [134, "var(--color-success)"],
   [43, "var(--color-warning)"],
   [359, "var(--color-danger)"],
-  [260, "var(--color-magenta)"],
-  [186, "var(--color-cyan)"],
+  [260, "#c5a4cb"],
+  [186, "#91c2d5"],
 ];
 
 export function accent(rgb: number): string {

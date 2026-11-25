@@ -7,10 +7,11 @@ import { keys } from "@/lib/events";
 import { CALENDAR_STACK_BELOW, useApp, useWidth } from "@/lib/app";
 import { sameDay, time } from "@/lib/format";
 import { accent, cn } from "@/lib/utils";
-import { Button, Card, Center, Dialog, EmptyState, IconButton, Input, Select, Spinner, Switch } from "@/components/ui";
+import { Button, Card, Center, Dialog, EmptyState, IconButton, Input, Select, Spinner, Switch, WorkspaceHeading } from "@/components/ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const monthTitle = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" });
+const dayButtonTitle = new Intl.DateTimeFormat(undefined, { dateStyle: "full" });
 const agendaTitle = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -61,20 +62,20 @@ export default function CalendarPage() {
   };
 
   const grid = (
-    <Card className={cn("flex min-h-0 min-w-0 flex-col overflow-hidden", stacked ? "h-[min(520px,62%)] shrink-0" : "flex-1")}>
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <h1 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg">{monthTitle.format(month)}</h1>
+    <Card tone="workbench" className={cn("flex min-w-0 flex-col overflow-hidden", stacked ? "h-[min(520px,62%)] min-h-[296px] shrink-0" : "min-h-0 flex-1")}>
+      <div className="flex min-h-16 shrink-0 flex-wrap items-center gap-1 border-b border-border bg-surface px-3 py-2 sm:gap-2 sm:px-5">
+        <h2 className="page-title min-w-0 flex-1 truncate">{monthTitle.format(month)}</h2>
         {events.isFetching && <Spinner />}
         <Button variant="outline" size="sm" onClick={goToday}>Today</Button>
         <IconButton icon={ChevronLeft} label="Previous month" onClick={() => go(-1)} />
         <IconButton icon={ChevronRight} label="Next month" onClick={() => go(1)} />
       </div>
-      <div className="grid grid-cols-7 px-3 text-[11px] font-medium text-subtle">
+      <div className="grid min-h-8 shrink-0 grid-cols-7 items-center border-b border-border bg-surface text-[13px] font-medium text-subtle">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="px-2 pb-1.5">{width < 560 ? d[0] : d}</div>
+          <div key={d} className="px-2 sm:px-3">{width < 560 ? d[0] : d}</div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-1 px-3 pb-3">
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-border">
         {Array.from({ length: 42 }, (_, i) => {
           const day = addDays(from, i);
           return (
@@ -102,23 +103,23 @@ export default function CalendarPage() {
   const writableLists = remindersOn ? (lists.data ?? []).filter((l) => l.writable) : [];
   const total = dayEvents.length + dayReminders.length;
   const agenda = (
-    <Card className={cn("flex min-h-0 flex-col overflow-hidden", stacked ? "flex-1" : "w-[320px] shrink-0")}>
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+    <Card className={cn("flex flex-col overflow-hidden", stacked ? "min-h-52 flex-1" : "min-h-0 w-[320px] shrink-0")}>
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-control border border-border-strong bg-selected text-sm font-medium text-accent">
+          {selected.getDate()}
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold text-fg">{agendaTitle.format(selected)}</div>
-          <div className="text-xs text-subtle">{summary(dayEvents.length, dayReminders.length)}</div>
+          <h2 className="truncate text-base font-medium text-fg" title={agendaTitle.format(selected)}>{agendaTitle.format(selected)}</h2>
+          <p className="text-[13px] text-subtle">{summary(dayEvents.length, dayReminders.length)}</p>
         </div>
-        <Button variant="primary" size="sm" icon={Plus} disabled={!connected || !(writable.length || writableLists.length)} onClick={() => setCreating(true)}>
-          New
-        </Button>
-      </div>
+      </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {events.isLoading ? (
           <Center><Spinner /></Center>
         ) : events.error ? (
           <EmptyState icon={CalendarIcon} title="Couldn't load events" hint={errorText(events.error)} />
         ) : !total ? (
-          <EmptyState icon={CalendarIcon} title="A free day" hint={connected ? "Add an event or a reminder with New." : "Connect to your Mac in Settings."} />
+          <EmptyState icon={CalendarIcon} title="A free day" hint={connected ? "Add an event or a reminder with New item." : "Connect to your Mac in Settings."} />
         ) : (
           <>
             {dayEvents.map((e) => <AgendaRow key={e.id + e.start} event={e} color={colorOf(e)} calendar={calendars.data?.find((c) => c.id === e.calendar_id)} />)}
@@ -135,9 +136,16 @@ export default function CalendarPage() {
   );
 
   return (
-    <div ref={ref} className={cn("flex h-full gap-4", stacked && "flex-col")}>
-      {grid}
-      {agenda}
+    <div ref={ref} className="flex h-full flex-col">
+      <WorkspaceHeading title="Calendar">
+        <Button variant="primary" icon={Plus} disabled={!connected || !(writable.length || writableLists.length)} onClick={() => setCreating(true)}>
+          New item
+        </Button>
+      </WorkspaceHeading>
+      <div className={cn("flex min-h-0 flex-1 gap-4 sm:gap-6", stacked && "flex-col overflow-y-auto")}>
+        {grid}
+        {agenda}
+      </div>
       {creating && <NewItemDialog day={selected} calendars={writable} lists={writableLists} onClose={() => setCreating(false)} />}
     </div>
   );
@@ -158,15 +166,18 @@ function DayCell({ day, inMonth, today, selected, events, reminders, lists, colo
     <button
       ref={ref}
       onClick={onClick}
+      aria-label={dayButtonTitle.format(day)}
+      aria-current={today ? "date" : undefined}
+      aria-pressed={selected}
       className={cn(
-        "relative flex min-h-0 flex-col overflow-hidden rounded-control border p-1.5 text-left transition-colors duration-150",
-        selected ? "border-border-strong bg-raised" : "border-transparent hover:bg-raised",
+        "relative flex min-h-0 flex-col overflow-hidden p-1.5 text-left outline-offset-[-2px] transition-colors duration-150 sm:p-2",
+        selected ? "bg-selected" : inMonth ? "bg-surface hover:bg-hover" : "bg-deep hover:bg-hover",
       )}
     >
       <span
         className={cn(
-          "flex h-5 min-w-5 items-center justify-center self-start rounded-full px-1 text-[11.5px] font-medium",
-          today ? "bg-primary text-primary-fg" : inMonth ? "text-fg" : "text-subtle",
+          "flex h-5 min-w-5 items-center justify-center self-start rounded-full px-1 text-xs font-medium tabular-nums",
+          today ? "text-accent ring-1 ring-inset ring-accent" : inMonth ? "text-fg" : "text-subtle",
         )}
       >
         {day.getDate()}

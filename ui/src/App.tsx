@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Calendar, Image, ListChecks, MapPin, MessageCircle, NotebookPen, Settings, type LucideIcon } from "lucide-react";
+import { AudioLines, Calendar, Check, ChevronDown, Image, ListChecks, MapPin, MessageCircle, NotebookPen, Settings, type LucideIcon } from "lucide-react";
+import { DropdownMenu as Menu } from "radix-ui";
 import { onServerEvent, type Status } from "./lib/bb";
 import { applyServerEvent } from "./lib/events";
-import { RAIL_COMPACT_BELOW, tabShown, useApp, useWidth, type Tab } from "./lib/app";
+import { tabShown, useApp, useWidth, type Tab } from "./lib/app";
 import { cn } from "./lib/utils";
-import { Center, Spinner } from "./components/ui";
+import { Button, Center, Spinner } from "./components/ui";
 import { MessagesPage } from "./pages/Messages";
 
 // Messages is the landing tab; the rest load on first visit.
@@ -52,65 +53,89 @@ function statusLine(status: Status): [string, string] {
   }
 }
 
-function Rail({ compact }: { compact: boolean }) {
-  const { tab, setTab, status, config } = useApp();
+function AppHeader() {
+  const { status, setTab, tab, config } = useApp();
+  const [headerRef, headerWidth] = useWidth<HTMLElement>();
+  const fullNavigation = headerWidth >= 1100;
   const [label, dot] = statusLine(status);
-  return (
-    <nav className={cn("flex shrink-0 flex-col gap-1 py-1 transition-[width] duration-300 ease-decel", compact ? "w-11" : "w-48")}>
-      <div className={cn("mb-3 flex h-9 items-center gap-2.5", compact ? "justify-center" : "px-2")}>
-        <Logo />
-        {!compact && <span className="text-[14px] font-semibold tracking-tight text-fg">BlackBubbles</span>}
-      </div>
-      {NAV.filter(([id]) => tabShown(id, config.services)).map(([id, Icon, name]) => {
-        const active = tab === id;
-        return (
-          <button
-            key={id}
-            title={compact ? name : undefined}
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex h-9 items-center gap-3 rounded-full text-[13px] transition-colors duration-200",
-              compact ? "w-11 justify-center" : "px-3.5",
-              active ? "bg-primary font-medium text-primary-fg" : "text-muted hover:bg-raised hover:text-fg",
-            )}
-          >
-            <Icon className="size-4 shrink-0" />
-            {!compact && <span className="truncate">{name}</span>}
-          </button>
-        );
-      })}
-      <div className="flex-1" />
-      <button
-        onClick={() => setTab("settings")}
-        title={status.state === "Disconnected" ? status.detail : label}
-        className={cn("flex h-9 items-center gap-2.5 rounded-full text-xs text-subtle hover:bg-raised hover:text-muted", compact ? "w-11 justify-center" : "px-3.5")}
-      >
-        <span className={cn("size-2 shrink-0 rounded-full", status.state === "Connecting" && "animate-pulse")} style={{ background: dot }} />
-        {!compact && <span className="truncate">{label}</span>}
-      </button>
-    </nav>
-  );
-}
+  const services = NAV.filter(([id]) => tabShown(id, config.services));
+  const [, CurrentIcon, currentLabel] = NAV.find(([id]) => id === tab)!;
 
-function Logo() {
   return (
-    <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden>
-      <rect x="0.5" y="0.5" width="31" height="31" rx="9" fill="#171717" stroke="#404040" />
-      <path d="M9 10.5h10a3.5 3.5 0 0 1 3.5 3.5v2a3.5 3.5 0 0 1-3.5 3.5h-5.5L10 22.5v-3.1A3.5 3.5 0 0 1 5.5 16v-2A3.5 3.5 0 0 1 9 10.5Z" fill="#fafafa" />
-      <circle cx="23.5" cy="21.5" r="3" fill="#737373" />
-    </svg>
+    <header ref={headerRef} className="relative z-10 shrink-0 border-b border-border bg-nav">
+      <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-3 px-3 sm:px-6 xl:px-8">
+        <div className="flex shrink-0 items-center gap-2.5 text-fg" aria-label="BlackBubbles">
+          <span className="grid size-9 place-items-center rounded-control border border-border-strong bg-raised text-accent">
+            <MessageCircle className="size-[19px]" aria-hidden />
+          </span>
+          <span className={cn("font-display text-2xl leading-none font-medium tracking-tight", headerWidth < 600 && "hidden")}>BlackBubbles</span>
+        </div>
+        <nav aria-label="Apple services" className={cn("flex min-w-0 flex-1", fullNavigation && "justify-center")}>
+          {fullNavigation ? <div className="flex items-center gap-0.5">
+            {services.map(([id, Icon, name]) => (
+              <button
+                key={id}
+                title={id === "settings" ? name : undefined}
+                aria-label={name}
+                aria-current={tab === id ? "page" : undefined}
+                onClick={() => setTab(id)}
+                className={cn(
+                  "relative flex h-10 items-center gap-1.5 whitespace-nowrap rounded-control px-2.5 text-sm font-medium transition-colors hover:bg-hover hover:text-fg",
+                  tab === id ? "bg-selected text-fg after:absolute after:inset-x-2.5 after:bottom-0 after:h-px after:bg-accent" : "text-muted",
+                )}
+              >
+                {id === "settings" ? <Icon className="size-4" aria-hidden /> : name}
+              </button>
+            ))}
+          </div> : <div className="min-w-0">
+            <Menu.Root>
+              <Menu.Trigger asChild>
+                <Button variant="outline" icon={CurrentIcon} aria-label={`Switch service. Current service: ${currentLabel}`} className="max-w-full gap-1.5 px-2.5">
+                  <span className="truncate">{currentLabel}</span>
+                  <ChevronDown aria-hidden className="size-3.5 text-muted" />
+                </Button>
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Content align="start" sideOffset={8} className="z-50 min-w-48 rounded-card border border-border-strong bg-raised p-1.5 animate-pop">
+                  {services.map(([id, Icon, name]) => (
+                    <Menu.Item
+                      key={id}
+                      onSelect={() => setTab(id)}
+                      className={cn("flex min-h-9 items-center gap-2.5 rounded-control px-2.5 text-sm text-fg outline-none data-highlighted:bg-hover", id === tab && "bg-selected")}
+                    >
+                      <Icon className="size-4 text-muted" aria-hidden />
+                      <span className="flex-1">{name}</span>
+                      {id === tab && <Check className="size-4 text-accent" aria-label="Current service" />}
+                    </Menu.Item>
+                  ))}
+                </Menu.Content>
+              </Menu.Portal>
+            </Menu.Root>
+          </div>}
+        </nav>
+        <button
+          onClick={() => setTab("settings")}
+          title={status.state === "Disconnected" ? status.detail : label}
+          aria-label={`Mac connection: ${label}`}
+          className="flex h-9 min-w-0 max-w-[min(34%,180px)] shrink-0 items-center gap-2 rounded-full border border-border-strong bg-raised px-2.5 text-[13px] font-medium text-body hover:bg-hover"
+        >
+          <span className={cn("size-2 shrink-0 rounded-full", status.state === "Connecting" && "animate-pulse")} style={{ background: dot }} />
+          <span className="truncate" aria-live="polite">{label}</span>
+        </button>
+      </div>
+    </header>
   );
 }
 
 function Toasts() {
   const { toasts } = useApp();
   return (
-    <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2">
+    <div className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2" role="status">
       {toasts.map((t) => (
         <div
           key={t.id}
           className={cn(
-            "selectable pointer-events-auto rounded-card border border-border bg-surface px-4 py-3 text-[13px] text-fg shadow-soft",
+            "selectable pointer-events-auto rounded-card border border-border-strong bg-raised px-4 py-3 text-sm text-fg",
             t.leaving ? "opacity-0 translate-y-2 scale-[0.96] transition-all duration-150 ease-accel" : "animate-toast",
           )}
         >
@@ -124,7 +149,6 @@ function Toasts() {
 export function App() {
   const { tab, setTab, status, config } = useApp();
   const qc = useQueryClient();
-  const [rootRef, width] = useWidth<HTMLDivElement>();
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set([tab]));
   const wasConnected = useRef(status.state === "Connected");
 
@@ -148,13 +172,16 @@ export function App() {
   }, [status, qc]);
 
   return (
-    <div ref={rootRef} className="flex h-full gap-4 p-4">
-      <Rail compact={width > 0 && width < RAIL_COMPACT_BELOW} />
-      <main className="relative min-w-0 flex-1">
+    <div className="flex h-full flex-col">
+      <AppHeader />
+      <main aria-label={NAV.find(([id]) => id === tab)?.[2]} className="relative mx-auto w-full max-w-[1280px] min-h-0 flex-1">
         {[...visited].filter((id) => tabShown(id, config.services)).map((id) => {
           const Page = PAGES[id];
           return (
-            <div key={id} className={cn("absolute inset-0", id === tab ? "animate-enter" : "hidden")}>
+            <div key={id} className={cn(
+              "workspace-view absolute inset-x-3 top-4 bottom-3 sm:inset-x-6 sm:top-8 sm:bottom-6 xl:inset-x-8",
+              id === tab ? "animate-enter" : "hidden",
+            )}>
               <Suspense fallback={<Center><Spinner /></Center>}>
                 <Page />
               </Suspense>

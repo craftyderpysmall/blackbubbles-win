@@ -5,11 +5,11 @@ import { ArrowLeft, ArrowUp, Bell, BellOff, Download, Maximize2, File as FileIco
 import { api, blobUrl, errorText, native, saveAs, type Attachment, type Chat } from "@/lib/bb";
 import { ContextMenu as CM } from "radix-ui";
 import { addToThread, keys, type LocalMessage, type ThreadData } from "@/lib/events";
-import { NARROW_BELOW, useApp, useWidth } from "@/lib/app";
+import { NARROW_BELOW, useApp, useReturnFocus, useWidth } from "@/lib/app";
 import { bytes, dayLabel, groupEventText, sameDay, shortTime, time } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useNames, type NameOf } from "@/lib/contacts";
-import { Avatar, Badge, Button, Card, Center, EmptyState, IconButton, SearchInput, Spinner, Textarea } from "@/components/ui";
+import { Avatar, Badge, Button, Card, Center, EmptyState, IconButton, PaneHeader, SearchInput, Spinner, Textarea, WorkspaceHeading } from "@/components/ui";
 import { Linkified } from "@/components/Linkified";
 import { Lightbox } from "@/components/Lightbox";
 
@@ -31,6 +31,7 @@ const isSms = (chat: Chat) => chat.service !== "IMessage";
 export function MessagesPage() {
   const { connected, boot } = useApp();
   const [ref, width] = useWidth<HTMLDivElement>();
+  const paneFocus = useReturnFocus();
   const [selected, setSelected] = useState<string | null>(null);
   const chats = useQuery({ queryKey: keys.chats, queryFn: () => api.chats(300), enabled: connected, staleTime: Infinity });
 
@@ -54,23 +55,24 @@ export function MessagesPage() {
   const narrow = width > 0 && width < NARROW_BELOW;
   const listWidth = Math.min(360, Math.max(280, width * 0.3));
 
-  const list = <ChatList chats={chats.data} seen={seen} loading={chats.isLoading} error={chats.error} selected={selected} onSelect={setSelected} />;
+  const list = <ChatList chats={chats.data} seen={seen} loading={chats.isLoading} error={chats.error} selected={selected} onSelect={(guid) => { paneFocus.remember(); setSelected(guid); }} />;
   return (
-    <div ref={ref} className="flex h-full gap-4">
-      {(!narrow || !chat) && (
-        <Card className="flex min-w-0 flex-col overflow-hidden" style={narrow ? { flex: 1 } : { width: listWidth }}>
+    <div ref={ref} className="flex h-full flex-col">
+      <WorkspaceHeading title="Messages" />
+      <div className="flex min-h-0 flex-1 gap-4 sm:gap-6">
+        <Card data-pane-index tabIndex={-1} className={cn("flex min-w-0 flex-col overflow-hidden", narrow && chat && "hidden")} style={narrow ? { flex: 1 } : { width: listWidth }}>
           {list}
         </Card>
-      )}
-      {(!narrow || chat) && (
-        <Card className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {chat ? (
-            <Thread key={chat.guid} chat={chat} onBack={narrow ? () => setSelected(null) : undefined} />
-          ) : (
-            <EmptyState icon={MessageCircle} title={connected ? "Pick a conversation" : "Not connected"} hint={connected ? "Your iMessage and SMS chats from the Mac." : "Pair with your Mac in Settings."} />
-          )}
-        </Card>
-      )}
+        {(!narrow || chat) && (
+          <Card tone="workbench" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {chat ? (
+              <Thread key={chat.guid} chat={chat} onBack={narrow ? () => { setSelected(null); paneFocus.restore(); } : undefined} />
+            ) : (
+              <EmptyState icon={MessageCircle} title={connected ? "Pick a conversation" : "Not connected"} hint={connected ? "Your iMessage and SMS chats from the Mac." : "Pair with your Mac in Settings."} />
+            )}
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
@@ -118,12 +120,12 @@ function ChatList({ chats, seen, loading, error, selected, onSelect }: { chats?:
 
   return (
     <>
-      <div className="flex flex-col gap-3 p-4 pb-2">
+      <div className="mb-2 flex flex-col gap-4 border-b border-border p-4">
         <div className="flex items-baseline justify-between">
-          <h1 className="text-[15px] font-semibold text-fg">Messages</h1>
+          <h2 className="text-lg font-medium text-fg">Conversations</h2>
           {chats && <span className="text-xs text-subtle">{unreadLabel(chats, seen)}</span>}
         </div>
-        <SearchInput value={filter} onChange={setFilter} placeholder="Search" />
+        <SearchInput value={filter} onChange={setFilter} placeholder="Search messages" />
       </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {loading ? (
@@ -161,7 +163,9 @@ const ChatRow = memo(function ChatRow({ chat, name, unread, active, onSelect }: 
   return (
     <button
       onClick={() => onSelect(chat.guid)}
-      className={cn("flex h-[60px] w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150", active ? "bg-border" : "hover:bg-raised")}
+      data-pane-item={chat.guid}
+      aria-current={active || undefined}
+      className="list-row flex h-[60px] w-full items-center gap-3 rounded-control px-2.5 text-left transition-colors duration-150 hover:bg-hover"
     >
       <Avatar name={chatTitle(chat, name)} size={38} />
       <span className="min-w-0 flex-1">
@@ -336,16 +340,16 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
         if (e.dataTransfer.files.length) sendFiles(e.dataTransfer.files);
       }}
     >
-      <div className="flex min-h-14 items-center gap-3 border-b border-border px-3 py-2">
-        {onBack && <IconButton icon={ArrowLeft} label="Back" onClick={onBack} />}
-        <Avatar name={title} size={34} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-semibold text-fg">{title}</div>
-          {/* The numbers behind the names, or the people in a named group. */}
-          {(people !== title || people !== chat.participants.join(", ")) && (
-            <div className="selectable truncate text-xs text-subtle">{people !== title ? people : chat.participants.join(", ")}</div>
-          )}
-        </div>
+      <PaneHeader
+        title={title}
+        subtitle={(people !== title || people !== chat.participants.join(", ")) && (
+          <span className="selectable">{people !== title ? people : chat.participants.join(", ")}</span>
+        )}
+        leading={<>
+          {onBack && <IconButton icon={ArrowLeft} label="Back" onClick={onBack} autoFocus />}
+          <Avatar name={title} size={36} />
+        </>}
+      >
         <div className="hidden items-center gap-1.5 sm:flex">
           <Badge>{chat.service === "IMessage" ? "iMessage" : chat.service === "Sms" ? "SMS" : "RCS"}</Badge>
           {chat.my_address && (
@@ -358,8 +362,8 @@ function Thread({ chat, onBack }: { chat: Chat; onBack?: () => void }) {
             </Badge>
           )}
         </div>
-        <IconButton icon={muted ? BellOff : Bell} label={muted ? "Unmute notifications" : "Mute notifications"} onClick={toggleMute} className={muted ? "text-fg" : undefined} />
-      </div>
+        <IconButton icon={muted ? BellOff : Bell} label={muted ? "Unmute notifications" : "Mute notifications"} onClick={toggleMute} className={muted ? "text-accent" : undefined} />
+      </PaneHeader>
 
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-4">
         {thread.isLoading ? (
@@ -446,7 +450,7 @@ function StagedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
       <button
         aria-label={`Remove ${file.name}`}
         onClick={onRemove}
-        className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-border-strong bg-surface text-fg shadow-lg transition-colors hover:bg-raised"
+        className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-border-strong bg-surface text-fg transition-colors hover:bg-hover"
       >
         <X className="size-3" />
       </button>
@@ -477,14 +481,14 @@ function AutoTextarea({ value, onChange, onSubmit, onPaste, placeholder }: { val
           onSubmit();
         }
       }}
-      className="max-h-40 min-h-9 flex-1 rounded-[18px] py-[7px] leading-5"
+      className="max-h-40 min-h-9 flex-1 rounded-card py-[7px] leading-5"
     />
   );
 }
 
 const Bubble = memo(function Bubble({ m, sms, sender, tail, onView }: { m: LocalMessage; sms: boolean; sender: string | null; tail: boolean; onView: (a: Attachment) => void }) {
   const mine = m.is_from_me;
-  const style = mine ? (sms ? "border border-border-strong text-fg" : "bb-inverted bg-primary text-primary-fg") : "bg-raised text-fg";
+  const style = mine ? (sms ? "border border-border-strong text-fg" : "bg-selected text-fg border border-border-strong") : "bg-surface text-fg";
   const text = m.text?.replace(/￼/g, "").trim();
   return (
     <div className={cn("flex flex-col", mine ? "items-end" : "items-start", tail ? "pb-2" : "pb-0.5")}>
@@ -493,7 +497,7 @@ const Bubble = memo(function Bubble({ m, sms, sender, tail, onView }: { m: Local
         <AttachmentView key={a.guid} a={a} mine={mine} onView={onView} />
       ))}
       {text && (
-        <div title={time(m.date)} className={cn("selectable max-w-[min(78%,560px)] rounded-[18px] px-3.5 py-[7px] text-[13.5px] leading-[1.4] whitespace-pre-wrap break-words", style, m.failed && "opacity-60")}>
+        <div title={time(m.date)} className={cn("selectable max-w-[min(78%,560px)] rounded-card px-4 py-2.5 text-base leading-relaxed whitespace-pre-wrap break-words", style, m.failed && "opacity-60")}>
           <Linkified text={text} />
         </div>
       )}
@@ -510,12 +514,12 @@ const Bubble = memo(function Bubble({ m, sms, sender, tail, onView }: { m: Local
  *  As…" can't save images served by the app. */
 function AttachmentMenu({ a, onOpen, children }: { a: Attachment; onOpen?: () => void; children: React.ReactNode }) {
   const { toast } = useApp();
-  const item = "flex h-8 cursor-default items-center gap-2 rounded-[8px] px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-raised [&_svg]:size-4 [&_svg]:text-muted";
+  const item = "flex h-8 cursor-default items-center gap-2 rounded-control px-2.5 text-[13px] text-fg outline-none data-[highlighted]:bg-hover [&_svg]:size-4 [&_svg]:text-muted";
   return (
     <CM.Root>
       <CM.Trigger asChild>{children}</CM.Trigger>
       <CM.Portal>
-        <CM.Content className="z-50 min-w-44 rounded-control border border-border bg-surface p-1 shadow-soft animate-pop">
+        <CM.Content className="z-50 min-w-44 rounded-card border border-border-strong bg-raised p-1.5 animate-pop">
           {onOpen && (
             <CM.Item className={item} onSelect={onOpen}>
               <Maximize2 /> Open
@@ -538,7 +542,7 @@ function AttachmentView({ a, mine, onView }: { a: Attachment; mine: boolean; onV
   if (image) {
     return (
       <AttachmentMenu a={a} onOpen={() => onView(a)}>
-        <button onClick={() => onView(a)} className="mb-0.5 overflow-hidden rounded-[18px] border border-border bg-raised">
+        <button onClick={() => onView(a)} className="mb-0.5 overflow-hidden rounded-card border border-border bg-raised">
           <img src={blobUrl("Attachment", a.guid)} alt={a.file_name ?? ""} loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} className="block max-h-72 max-w-[min(280px,60vw)] min-h-16 min-w-16 object-cover" />
         </button>
       </AttachmentMenu>
@@ -546,7 +550,7 @@ function AttachmentView({ a, mine, onView }: { a: Attachment; mine: boolean; onV
   }
   return (
     <AttachmentMenu a={a}>
-    <button onClick={save} title="Save As…" className={cn("mb-0.5 flex max-w-72 items-center gap-3 rounded-[18px] border px-3 py-2 text-left", mine ? "border-border-strong" : "border-border bg-raised")}>
+    <button onClick={save} title="Save As…" className={cn("mb-0.5 flex max-w-72 items-center gap-3 rounded-card border px-3 py-2 text-left", mine ? "border-border-strong" : "border-border bg-raised")}>
       <FileIcon className="size-5 shrink-0 text-muted" />
       <span className="min-w-0">
         <span className="block truncate text-[13px] text-fg">{a.file_name ?? "Attachment"}</span>

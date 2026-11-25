@@ -6,12 +6,12 @@ import { api, blobUrl, errorText, type Asset } from "@/lib/bb";
 import { keys } from "@/lib/events";
 import { useApp, useWidth } from "@/lib/app";
 import { longTime } from "@/lib/format";
-import { Card, Center, Chip, EmptyState, IconButton, Spinner } from "@/components/ui";
+import { Button, Center, Chip, EmptyState, Spinner, WorkspaceHeading } from "@/components/ui";
 import { Lightbox } from "@/components/Lightbox";
 
 /** Tiles stretch from this size so the grid always fills the width exactly. */
-const MIN_TILE = 132;
-const GAP = 4;
+const MIN_TILE = 152;
+const GAP = 12;
 const PAGE = 240;
 
 export default function PhotosPage() {
@@ -30,10 +30,12 @@ export default function PhotosPage() {
   const current = viewing !== null ? list[viewing] : undefined;
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-3 px-4 pt-3 pb-3">
-        <h1 className="text-[15px] font-semibold text-fg">Photos</h1>
-        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none]">
+    <section className="flex h-full flex-col">
+      <WorkspaceHeading title="Photos">
+        <Button variant="outline" icon={RotateCw} onClick={() => void (albums.refetch(), assets.refetch())}>Refresh</Button>
+      </WorkspaceHeading>
+      <div className="mb-3 border-b border-border pb-3">
+        <div aria-label="Photo albums" className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none]">
           {(albums.data ?? [{ id: "all", title: "Recents", count: 0 }]).map((a) => (
             <Chip key={a.id} active={a.id === album} onClick={() => setAlbum(a.id)}>
               {a.title}
@@ -41,7 +43,6 @@ export default function PhotosPage() {
             </Chip>
           ))}
         </div>
-        <IconButton icon={RotateCw} label="Refresh" onClick={() => void (albums.refetch(), assets.refetch())} />
       </div>
       <div className="min-h-0 flex-1">
         {assets.isLoading ? (
@@ -66,14 +67,14 @@ export default function PhotosPage() {
           onNext={viewing < list.length - 1 ? () => setViewing(viewing + 1) : undefined}
         />
       )}
-    </Card>
+    </section>
   );
 }
 
 function Grid({ assets, onOpen, onNearEnd }: { assets: Asset[]; onOpen: (i: number) => void; onNearEnd: () => void }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [measure, width] = useWidth<HTMLDivElement>();
-  const inner = Math.max(0, width - 2 * 12);
+  const inner = Math.max(0, width - 8);
   const columns = Math.max(1, Math.floor((inner + GAP) / (MIN_TILE + GAP)));
   const tile = (inner - GAP * (columns - 1)) / columns;
   const rows = Math.ceil(assets.length / columns);
@@ -87,7 +88,7 @@ function Grid({ assets, onOpen, onNearEnd }: { assets: Asset[]; onOpen: (i: numb
   }, [lastRow, rows, onNearEnd]);
 
   return (
-    <div ref={(el) => ((scroller.current = el), measure(el))} className="h-full overflow-y-auto px-3 pb-3">
+    <div ref={(el) => ((scroller.current = el), measure(el))} className="h-full overflow-y-auto pb-3">
       {width > 0 && (
         <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
           {items.map((row) => (
@@ -106,7 +107,7 @@ function Grid({ assets, onOpen, onNearEnd }: { assets: Asset[]; onOpen: (i: numb
 function Tile({ asset, size, onClick }: { asset: Asset; size: number; onClick: () => void }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <button onClick={onClick} className="group relative shrink-0 overflow-hidden rounded-[6px] bg-raised" style={{ width: size, height: size }}>
+    <button aria-label={`Open ${asset.is_video ? "video" : "photo"} from ${longTime(asset.created)}`} onClick={onClick} className="group relative shrink-0 overflow-hidden rounded-control bg-raised ring-1 ring-inset ring-border" style={{ width: size, height: size }}>
       <img
         src={blobUrl("PhotoThumbnail", asset.id)}
         alt=""
@@ -117,13 +118,13 @@ function Tile({ asset, size, onClick }: { asset: Asset; size: number; onClick: (
         style={{ opacity: loaded ? 1 : 0 }}
       />
       {asset.is_video && (
-        <span className="absolute right-1.5 bottom-1.5 flex size-5 items-center justify-center rounded-full bg-black/60">
-          <Play className="size-3 fill-fg text-fg" />
+        <span className="absolute right-2 bottom-2 flex size-5 items-center justify-center rounded-full bg-black/65 text-white">
+          <Play className="size-3 fill-current" />
         </span>
       )}
       {asset.favorite && (
-        <span className="absolute left-1.5 bottom-1.5 flex size-5 items-center justify-center rounded-full bg-black/60">
-          <Heart className="size-3 fill-fg text-fg" />
+        <span className="absolute left-2 bottom-2 flex size-5 items-center justify-center rounded-full bg-black/65 text-white">
+          <Heart className="size-3 fill-current" />
         </span>
       )}
     </button>
